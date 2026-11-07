@@ -96,3 +96,11 @@
 .run-project-button:hover:not(:disabled){background:#3d5d8d}
 .run-project-button:disabled{opacity:.35;cursor:default}
 .task-select{max-width:190px;height:24px;padding:0 6px;border:1px solid #39465a;border-radius:4px;color:#cbd7e9;background:#1c222c;font-size:10px}
+
+/* Live delimiter matching */
+.bracket-match{
+  color:#f7d794;
+  background:#5b4a2b99;
+  outline:1px solid #b99352;
+  border-radius:2px;
+}
