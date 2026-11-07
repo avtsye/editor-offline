@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Editor Offline",
+        "title": "עורך קוד אופליין",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,
@@ -31,10 +31,19 @@
       "nsis"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Offline-first code editor",
-    "longDescription": "A lightweight, independent code editor designed to work locally on Windows.",
+    "shortDescription": "עורך קוד מקצועי, עצמאי וללא חיבור לרשת",
+    "longDescription": "סביבת פיתוח מקומית למערכת Windows, עם ממשק עברי, עריכת קוד, ניהול פרויקטים וכלי פיתוח — ללא תלות בחיבור לאינטרנט.",
     "icon": [
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": true,
+        "languages": [
+          "Hebrew",
+          "English"
+        ]
+      }
+    }
   }
 }
