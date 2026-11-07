@@ -89,7 +89,6 @@ fn create_directory_in_directory(parent: String, name: String) -> Result<String,
     Ok(path.to_string_lossy().to_string())
 }
 
-
 #[tauri::command]
 fn rename_path(path: String, name: String) -> Result<String, String> {
     validate_child_name(&name)?;
@@ -102,10 +101,12 @@ fn rename_path(path: String, name: String) -> Result<String, String> {
         .ok_or_else(|| "לא ניתן לשנות את שם תיקיית הבסיס.".to_string())?;
     let destination = parent.join(name);
     if destination.exists() {
-        return Err(format!("כבר קיים פריט בשם: {}", destination.display()));
+        return Err(format!(
+            "כבר קיים פריט בשם: {}",
+            destination.display()
+        ));
     }
-    fs::rename(&source, &destination)
-        .map_err(|error| format!("שינוי השם נכשל: {}", error))?;
+    fs::rename(&source, &destination).map_err(|error| format!("שינוי השם נכשל: {}", error))?;
     Ok(destination.to_string_lossy().to_string())
 }
 
