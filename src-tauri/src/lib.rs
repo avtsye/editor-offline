@@ -407,9 +407,7 @@ async fn chat_local_model(
         .json(&request)
         .send()
         .await
-        .map_err(|_| {
-            "הבקשה למודל המקומי נכשלה. בדקו ש־Ollama עדיין פועל.".to_string()
-        })?;
+        .map_err(|_| "הבקשה למודל המקומי נכשלה. בדקו ש־Ollama עדיין פועל.".to_string())?;
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
@@ -572,11 +570,8 @@ mod tests {
         let dependencies = root.join("node_modules");
         std::fs::create_dir(&source).expect("source directory should be created");
         std::fs::create_dir(&dependencies).expect("dependency directory should be created");
-        std::fs::write(
-            source.join("main.rs"),
-            "first line\nneedle here\nlast line",
-        )
-        .expect("source file should be written");
+        std::fs::write(source.join("main.rs"), "first line\nneedle here\nlast line")
+            .expect("source file should be written");
         std::fs::write(dependencies.join("ignored.js"), "needle in dependency")
             .expect("dependency file should be written");
 
