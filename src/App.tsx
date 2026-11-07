@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, GitBranch, HardDrive, Keyboard, PanelRightClose, Replace, RotateCw, Save, Search, Settings2, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, GitBranch, HardDrive, Keyboard, PanelRightClose, Plus, Replace, RotateCw, Save, Search, Settings2, X } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
@@ -114,7 +114,10 @@ export default function App() {
   };
   const switchTab=(tab:Tab)=>{
     setActiveId(tab.id);
+    const model=buffers.current.get(tab.id)??new TextBuffer(tab.content);
+    buffers.current.set(tab.id,model);
     const selection=selections.current.get(tab.id)??{start:0,end:0};
+    setCursor(model.positionAt(selection.start));
     window.requestAnimationFrame(()=>editor.current?.setSelectionRange(selection.start,selection.end));
   };
   const closeTab=(tab:Tab)=>{
