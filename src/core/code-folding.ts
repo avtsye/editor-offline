@@ -174,6 +174,26 @@ export class FoldModel {
     return rows;
   }
   getVisibleLineCount(): number { return this.getProjection().length; }
+  isLineHidden(line: number): boolean {
+    const target = Math.max(1, Math.floor(line));
+    return this.getProjection().every(row => row.line !== target);
+  }
+  visibleRowForSourceLine(line: number): number {
+    const target = Math.max(1, Math.floor(line));
+    const projection = this.getProjection();
+    let visibleIndex = 0;
+    for (const row of projection) {
+      if (row.line === target || (row.hiddenLineCount > 0 && target > row.line && target <= row.line + row.hiddenLineCount))
+        return visibleIndex;
+      visibleIndex += 1;
+    }
+    return Math.max(0, projection.length - 1);
+  }
+  sourceLineForVisibleRow(rowIndex: number): number {
+    const projection = this.getProjection();
+    const index = Math.max(0, Math.min(projection.length - 1, Math.floor(rowIndex)));
+    return projection[index]?.line ?? 1;
+  }
   sourceOffsetAtLine(line: number): number {
     const index = Math.max(0, Math.min(this.lineStarts.length - 1, Math.floor(line) - 1));
     return this.lineStarts[index] ?? 0;

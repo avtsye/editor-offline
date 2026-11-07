@@ -65,3 +65,36 @@ describe("FoldModel", () => {
     expect(model.getVisibleLineCount()).toBe(5);
   });
 });
+
+
+describe("FoldModel source/display mapping", () => {
+  it("maps hidden source lines to their visible fold row", async () => {
+    const { FoldModel } = await import("./code-folding");
+    const model = new FoldModel("function f() {\\n a();\\n b();\\n}\\nend();", "javascript");
+    model.toggle(model.getRanges()[0]);
+    expect(model.isLineHidden(2)).toBe(true);
+    expect(model.visibleRowForSourceLine(3)).toBe(0);
+    expect(model.sourceLineForVisibleRow(1)).toBe(5);
+  });
+
+  it("keeps nested folds when an outer fold is expanded", async () => {
+    const { FoldModel } = await import("./code-folding");
+    const model = new FoldModel("outer {\\n inner {\\n  run();\\n }\\n}\\nafter();", "javascript");
+    const [outer, inner] = model.getRanges();
+    model.toggle(inner);
+    model.toggle(outer);
+    expect(model.getVisibleLineCount()).toBe(2);
+    model.toggle(outer);
+    expect(model.getVisibleLineCount()).toBe(5);
+    expect(model.isLineHidden(3)).toBe(true);
+  });
+
+  it("drops stale folds when a document is replaced", async () => {
+    const { FoldModel } = await import("./code-folding");
+    const model = new FoldModel("if (ok) {\\n work();\\n}", "javascript");
+    model.collapseAll();
+    model.updateDocument("plain();", "javascript");
+    expect(model.getRanges()).toEqual([]);
+    expect(model.getVisibleLineCount()).toBe(1);
+  });
+});
