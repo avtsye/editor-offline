@@ -33,13 +33,13 @@ describe("editor commands", () => {
   });
 
   it("preserves an existing final newline when moving lines down", () => {
-    const result = moveLines("one\\ntwo\\nthree\\n", 4, 7, 1);
-    expect(result.text).toBe("one\\nthree\\ntwo\\n");
+    const result = moveLines("one\ntwo\nthree\n", 4, 7, 1);
+    expect(result.text).toBe("one\nthree\ntwo\n");
   });
 
   it("does not add a final newline when moving lines in a file without one", () => {
-    const result = moveLines("one\\ntwo\\nthree", 4, 7, 1);
-    expect(result.text.endsWith("\\n")).toBe(false);
+    const result = moveLines("one\ntwo\nthree", 4, 7, 1);
+    expect(result.text.endsWith("\n")).toBe(false);
   });
 
   it("moves a selected line down and keeps its selection", () => {
