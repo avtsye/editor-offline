@@ -52,6 +52,7 @@ describe("TextBuffer", () => {
     buffer.replaceAll("4");
     expect(buffer.undo()).toBe("3");
     expect(buffer.undo()).toBe("2");
+    expect(buffer.undo()).toBe("1");
     expect(buffer.canUndo()).toBe(false);
   });
 
