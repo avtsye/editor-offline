@@ -98,3 +98,30 @@ describe("FoldModel source/display mapping", () => {
     expect(model.getVisibleLineCount()).toBe(1);
   });
 });
+
+
+describe("fold parser resilience", () => {
+  it("does not lose an open brace after a mismatched closer", () => {
+    const ranges = findFoldRanges("function f() {\n  value[0);\n  run();\n}", "javascript");
+    expect(ranges).toContainEqual({ startLine: 1, endLine: 4, kind: "block", label: "}" });
+  });
+
+  it("ignores braces inside template literals", () => {
+    const ranges = findFoldRanges("function f() {\n  const value = `}`;\n  run();\n}", "javascript");
+    expect(ranges.map(({ startLine, endLine }) => [startLine, endLine])).toEqual([[1, 4]]);
+  });
+
+  it("tracks folds that begin on the same line independently", async () => {
+    const { FoldModel } = await import("./code-folding");
+    const model = new FoldModel("function f() { if (ok) {\n  run();\n }\n}", "javascript");
+    const [outer, inner] = model.getRanges();
+    expect(outer.startLine).toBe(inner.startLine);
+    model.toggle(inner);
+    expect(model.isCollapsed(inner)).toBe(true);
+    expect(model.isCollapsed(outer)).toBe(false);
+    expect(model.getProjection()).toEqual([
+      { line: 1, hiddenLineCount: 2, placeholder: "… 2 lines" },
+      { line: 4, hiddenLineCount: 0, placeholder: null },
+    ]);
+  });
+});
