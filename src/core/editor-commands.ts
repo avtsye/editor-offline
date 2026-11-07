@@ -70,7 +70,7 @@ export function moveLines(text: string, start: number, end: number, direction: -
   if (blockEnd >= text.length) return { text, selectionStart: start, selectionEnd: end };
   const nextEnd = lineEndAt(text, blockEnd);
   const next = text.slice(blockEnd, nextEnd);
-  const moved = text.slice(0, from) + next + "\\n" + block + text.slice(nextEnd + 1);
+  const moved = text.slice(0, from) + next + "\n" + block + text.slice(nextEnd + 1);
   const shift = next.length + 1;
   return { text: moved, selectionStart: start + shift, selectionEnd: end + shift };
 }
