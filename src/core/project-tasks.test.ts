@@ -19,6 +19,26 @@ describe("project task detection", () => {
     expect(yarn[0].command).toBe("yarn start");
     expect(bun[0].command).toBe("bun run test");
   });
+  it("imports runnable tasks from VS Code task configuration", () => {
+    const tasks = detectProjectTasks(
+      [".vscode"],
+      undefined,
+      JSON.stringify({ tasks: [
+        { label: "Build app", type: "process", command: "npm", args: ["run", "build", "--mode", "production"] },
+        { label: "Open docs", type: "shell", command: "python", args: ["scripts/open docs.py"] },
+        { label: "Unsupported", type: "typescript", command: "tsc" },
+        { label: "Missing command" }
+      ] }),
+    );
+    expect(tasks.map(task => task.id)).toEqual(["vscode:Build app", "vscode:Open docs"]);
+    expect(tasks[0].command).toBe("npm run build --mode production");
+    expect(tasks[1].command).toBe('python "scripts/open docs.py"');
+  });
+
+  it("ignores malformed VS Code task configuration", () => {
+    expect(detectProjectTasks(["README.md"], undefined, "{broken")).toEqual([]);
+  });
+
   it("detects Rust run, test and check tasks", () => {
     expect(detectProjectTasks(["Cargo.toml"]).map(task => task.id)).toEqual(["cargo:run", "cargo:test", "cargo:check"]);
   });
