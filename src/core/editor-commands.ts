@@ -74,3 +74,29 @@ export function moveLines(text: string, start: number, end: number, direction: -
   const shift = next.length + 1;
   return { text: moved, selectionStart: start + shift, selectionEnd: end + shift };
 }
+
+
+export function duplicateLines(text: string, start: number, end: number): TextEditResult {
+  const from = lineStartAt(text, Math.max(0, Math.min(start, text.length)));
+  const lastLineEnd = lineEndAt(text, Math.max(start, end > start ? end - 1 : start));
+  const to = lastLineEnd < text.length ? lastLineEnd + 1 : lastLineEnd;
+  const block = text.slice(from, to);
+  const separator = block.endsWith("\\n") ? "" : "\\n";
+  const insertion = separator + block;
+  return {
+    text: text.slice(0, to) + insertion + text.slice(to),
+    selectionStart: from + block.length + separator.length,
+    selectionEnd: from + block.length + separator.length + Math.max(0, end - start),
+  };
+}
+
+export function deleteLines(text: string, start: number, end: number): TextEditResult {
+  const from = lineStartAt(text, Math.max(0, Math.min(start, text.length)));
+  const lastLineEnd = lineEndAt(text, Math.max(start, end > start ? end - 1 : start));
+  let to = lastLineEnd < text.length ? lastLineEnd + 1 : lastLineEnd;
+  let removeFrom = from;
+  if (to === text.length && from > 0) removeFrom = from - 1;
+  const nextText = text.slice(0, removeFrom) + text.slice(to);
+  const caret = Math.min(removeFrom, nextText.length);
+  return { text: nextText, selectionStart: caret, selectionEnd: caret };
+}
