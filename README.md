@@ -12,9 +12,12 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Hebrew-first workbench with an LTR code-editing surface
 - [x] Open files and folders, browse a workspace, edit and save text files
 - [x] Tabs, dirty-state indicators, keyboard shortcuts, find/replace
-- [x] Independent text-buffer module with bounded undo/redo and unit tests
-- [x] Windows CI for TypeScript, frontend build, Rust checks, and tests
+- [x] Independent transactional text buffer with per-tab undo/redo and unit tests
+- [x] Line/column mapping, CRLF handling, and incremental line indexing
+- [x] Indentation, paired brackets, find-next/previous, and replace operations
+- [x] Windows CI for TypeScript, frontend build, Rust checks, tests, and installer artifacts
 - [ ] Verify MSI/NSIS installers on a Windows machine
+- [ ] Replace the initial textarea input adapter with the custom virtualized editor surface
 - [ ] Syntax highlighting and language-aware editing
 - [ ] Integrated terminal and task runner
 - [ ] Local AI provider adapters
@@ -50,7 +53,9 @@ Build Windows installers:
 npm run tauri build
 ```
 
-The installer targets are configured for **MSI** and **NSIS**.
+The installer targets are configured for **MSI** and **NSIS**. Successful CI builds upload both installers as the `editor-offline-windows-0.1.0` workflow artifact.
+
+The current editing surface is an intentionally small native textarea adapter backed by the project-owned text buffer. It is not Monaco or CodeMirror; the custom renderer, viewport virtualization, and richer cursor/selection layer are a later editor-core milestone.
 
 ## Keyboard shortcuts
 
