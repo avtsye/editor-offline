@@ -108,3 +108,7 @@ For privacy, the native backend accepts only localhost, 127.0.0.1, and ::1 hosts
 
 
 The editor sends inference requests only to loopback addresses. A local model runtime may itself be configured to proxy requests to a remote service; choose a local model and verify the runtime's own routing settings when strict offline use is required.
+
+## Product specification
+
+The complete product target, including 200 detailed requirements, target architecture, delivery milestones, and release quality gates, is documented in [docs/PRODUCT_SPEC.md](docs/PRODUCT_SPEC.md).
