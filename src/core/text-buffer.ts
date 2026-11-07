@@ -166,8 +166,25 @@ export class TextBuffer {
 
   private applyTransaction(transaction: EditTransaction): void {
     const { start, deleted, inserted } = transaction;
+    this.updateLineIndex(start, start + deleted.length, inserted);
     this.value = this.value.slice(0, start) + inserted + this.value.slice(start + deleted.length);
-    this.rebuildLineIndex();
+  }
+
+  private updateLineIndex(start: number, end: number, inserted: string): void {
+    const delta = inserted.length - (end - start);
+    let prefixEnd = 0;
+    while (prefixEnd < this.lineStarts.length && this.lineStarts[prefixEnd] <= start) prefixEnd += 1;
+    let suffixStart = 0;
+    while (suffixStart < this.lineStarts.length && this.lineStarts[suffixStart] <= end) suffixStart += 1;
+
+    const nextStarts = this.lineStarts.slice(0, prefixEnd);
+    for (let index = 0; index < inserted.length; index += 1) {
+      if (inserted.charCodeAt(index) === 10) nextStarts.push(start + index + 1);
+    }
+    for (let index = suffixStart; index < this.lineStarts.length; index += 1) {
+      nextStarts.push(this.lineStarts[index] + delta);
+    }
+    this.lineStarts = nextStarts;
   }
 
   private rebuildLineIndex(): void {
