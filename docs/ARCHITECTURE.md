@@ -20,7 +20,7 @@ Editor Offline is an original desktop application, not a distribution of VS Code
    - Remains separate from the React view.
    - The current input adapter is a native textarea layered under a project-owned syntax renderer.
    - Syntax spans and line numbers are virtualized to a visible viewport with overscan; tokenization still scans the full document.
-   - A fully custom cursor/selection renderer, multi-cursor model, incremental tokenization, and large-file benchmarks remain planned work.
+   - A tested multi-selection engine now supports normalized selections, vertical cursor creation, next-occurrence selection, multi-range edits, paired-bracket backspace, and undo/redo through the transactional buffer. The current textarea adapter still displays only its native primary caret; the custom renderer and full visual multi-cursor integration remain the next editor-core milestone.
 4. **Language and tooling adapters — planned**
    - LSP for language intelligence.
    - DAP for debugging.
