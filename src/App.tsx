@@ -36,25 +36,39 @@ export default function App() {
   const gutter = useRef<HTMLDivElement>(null);
   const findInput = useRef<HTMLInputElement>(null);
   const paletteInput = useRef<HTMLInputElement>(null);
-  const buffer = useRef(new TextBuffer(WELCOME));
+  const buffers = useRef(new Map<string, TextBuffer>([["welcome", new TextBuffer(WELCOME)]]));
+  const selections = useRef(new Map<string, { start: number; end: number }>());
   const desktop = isTauri();
   const active = tabs.find(t=>t.id===activeId) ?? tabs[0];
   const text = active?.content ?? "";
-  const lines = useMemo(()=>Array.from({length:text.split("\n").length},(_,i)=>i+1),[text]);
+  const activeBuffer = buffers.current.get(activeId) ?? new TextBuffer(text);
+  if (!buffers.current.has(activeId)) buffers.current.set(activeId, activeBuffer);
+  const lines = useMemo(()=>Array.from({length:activeBuffer.lineCount},(_,i)=>i+1),[text,activeBuffer.lineCount]);
   const matches = query ? text.split(query).length-1 : 0;
   const notify = (message:string) => { setToast(message); window.setTimeout(()=>setToast(""),2500); };
-
-  const edit = (value:string) => {
-    buffer.current.replaceAll(value);
+  const updateCursor = (offset:number) => setCursor(activeBuffer.positionAt(offset));
+  const edit = (value:string, selection?:{start:number;end:number}) => {
+    activeBuffer.replaceAll(value);
     setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));
+    if (selection) {
+      selections.current.set(activeId, selection);
+      setCursor(activeBuffer.positionAt(selection.start));
+      window.requestAnimationFrame(()=> {
+        if (editor.current) {
+          editor.current.setSelectionRange(Math.min(selection.start,value.length),Math.min(selection.end,value.length));
+        }
+      });
+    }
   };
   const openPath = async (path:string) => {
     try {
       const content = await invoke<string>("read_text_file",{path});
       const old = tabs.find(t=>t.path===path);
-      if(old){setActiveId(old.id);buffer.current.load(old.content);return;}
+      if(old){setActiveId(old.id);return;}
       const tab:Tab={id:id(),path,title:path.split(/[\\/]/).pop()||"קובץ",content,saved:content,dirty:false};
-      setTabs(old=>[...old,tab]);setActiveId(tab.id);buffer.current.load(content);setFindOpen(false);
+      buffers.current.set(tab.id,new TextBuffer(content));
+      selections.current.set(tab.id,{start:0,end:0});
+      setTabs(old=>[...old,tab]);setActiveId(tab.id);setFindOpen(false);
     } catch(e){notify("פתיחת הקובץ נכשלה: "+String(e));}
   };
   const openFile = async () => {
@@ -82,28 +96,63 @@ export default function App() {
     if(!path){const chosen=await save({defaultPath:tab.title,filters:FILTERS});if(typeof chosen!=="string")return;path=chosen;}
     setBusy(true);
     try {
-      await invoke("write_text_file",{path,content:tab.content});
+      const contentToWrite=tab.content;
+      await invoke("write_text_file",{path,content:contentToWrite});
       const savedPath=path;
-      setTabs(old=>old.map(t=>t.id===tab.id?{...t,path:savedPath,title:savedPath.split(/[\\/]/).pop()||t.title,saved:t.content,dirty:false}:t));
+      setTabs(old=>old.map(t=>t.id===tab.id?{...t,path:savedPath,title:savedPath.split(/[\\/]/).pop()||t.title,saved:contentToWrite,dirty:t.content!==contentToWrite}:t));
       notify("הקובץ נשמר");
     }catch(e){notify("השמירה נכשלה: "+String(e));}finally{setBusy(false);}
   };
   const saveActive=async()=>{if(active)await saveTab(active);};
   const newFile=()=>{
     const tab:Tab={id:id(),path:null,title:"קובץ חדש",content:"",saved:"",dirty:false};
-    setTabs(old=>[...old,tab]);setActiveId(tab.id);buffer.current.load("");
+    buffers.current.set(tab.id,new TextBuffer(""));
+    selections.current.set(tab.id,{start:0,end:0});
+    setTabs(old=>[...old,tab]);setActiveId(tab.id);
     window.setTimeout(()=>editor.current?.focus(),0);
   };
-  const switchTab=(tab:Tab)=>{setActiveId(tab.id);buffer.current.load(tab.content);};
+  const switchTab=(tab:Tab)=>{
+    setActiveId(tab.id);
+    const selection=selections.current.get(tab.id)??{start:0,end:0};
+    window.requestAnimationFrame(()=>editor.current?.setSelectionRange(selection.start,selection.end));
+  };
   const closeTab=(tab:Tab)=>{
     if(tab.dirty&&!window.confirm("יש שינויים שלא נשמרו. לסגור בכל זאת?"))return;
     const rest=tabs.filter(t=>t.id!==tab.id);
-    if(!rest.length){const welcome:Tab={id:"welcome",path:null,title:"ברוכים הבאים",content:WELCOME,saved:WELCOME,dirty:false};setTabs([welcome]);setActiveId("welcome");buffer.current.load(WELCOME);return;}
+    buffers.current.delete(tab.id);
+    selections.current.delete(tab.id);
+    if(!rest.length){
+      const welcome:Tab={id:"welcome",path:null,title:"ברוכים הבאים",content:WELCOME,saved:WELCOME,dirty:false};
+      buffers.current.set("welcome",new TextBuffer(WELCOME));
+      setTabs([welcome]);setActiveId("welcome");return;
+    }
     setTabs(rest);
-    if(activeId===tab.id){const next=rest[rest.length-1];setActiveId(next.id);buffer.current.load(next.content);}
+    if(activeId===tab.id){
+      const next=rest[rest.length-1];setActiveId(next.id);
+      const selection=selections.current.get(next.id)??{start:0,end:0};
+      window.requestAnimationFrame(()=>editor.current?.setSelectionRange(selection.start,selection.end));
+    }
   };
-  const undo=()=>{const value=buffer.current.undo();setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));};
-  const redo=()=>{const value=buffer.current.redo();setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));};
+  const undo=()=>{
+    const model=buffers.current.get(activeId)??new TextBuffer(text);
+    buffers.current.set(activeId,model);
+    const value=model.undo();
+    setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));
+    const selection=selections.current.get(activeId)??{start:0,end:0};
+    const next={start:Math.min(selection.start,value.length),end:Math.min(selection.end,value.length)};
+    selections.current.set(activeId,next);setCursor(model.positionAt(next.start));
+    window.requestAnimationFrame(()=>editor.current?.setSelectionRange(next.start,next.end));
+  };
+  const redo=()=>{
+    const model=buffers.current.get(activeId)??new TextBuffer(text);
+    buffers.current.set(activeId,model);
+    const value=model.redo();
+    setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));
+    const selection=selections.current.get(activeId)??{start:0,end:0};
+    const next={start:Math.min(selection.start,value.length),end:Math.min(selection.end,value.length)};
+    selections.current.set(activeId,next);setCursor(model.positionAt(next.start));
+    window.requestAnimationFrame(()=>editor.current?.setSelectionRange(next.start,next.end));
+  };
   const replaceAll=()=>{if(!query)return;const value=text.split(query).join(replacement);edit(value);notify("ההחלפה הושלמה");};
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
@@ -121,17 +170,42 @@ export default function App() {
       else if(mod&&e.key.toLowerCase()==="f"){e.preventDefault();setFindOpen(true);setReplaceOpen(false);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="h"){e.preventDefault();setFindOpen(true);setReplaceOpen(true);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="p"){e.preventDefault();setPalette(true);window.setTimeout(()=>paletteInput.current?.focus(),0);}
-      else if(mod&&e.key.toLowerCase()==="z"){e.preventDefault();undo();}
-      else if(mod&&e.key.toLowerCase()==="y"){e.preventDefault();redo();}
+      else if(mod&&e.key.toLowerCase()==="z"&&e.target===editor.current){e.preventDefault();if(e.shiftKey)redo();else undo();}
+      else if(mod&&e.key.toLowerCase()==="y"&&e.target===editor.current){e.preventDefault();redo();}
       else if(e.key==="Escape"){setPalette(false);setFindOpen(false);}
     };
     window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key);
   });
   const editorKey=(e:KeyboardEvent<HTMLTextAreaElement>)=>{
-    if(e.key!=="Tab")return;e.preventDefault();
-    const el=e.currentTarget,start=el.selectionStart,end=el.selectionEnd;
-    edit(text.slice(0,start)+"    "+text.slice(end));
-    window.setTimeout(()=>{el.focus();el.setSelectionRange(start+4,start+4);},0);
+    const el=e.currentTarget;
+    const start=el.selectionStart;
+    const end=el.selectionEnd;
+    if(e.key==="Tab"){
+      e.preventDefault();
+      const next=text.slice(0,start)+"    "+text.slice(end);
+      edit(next,{start:start+4,end:start+4});
+      return;
+    }
+    if(e.key==="Enter"){
+      e.preventDefault();
+      const lineStart=text.lastIndexOf("\\n",Math.max(0,start-1))+1;
+      const beforeCursor=text.slice(lineStart,start);
+      const indent=beforeCursor.match(/^[\\t ]*/)?.[0]??"";
+      const extra=/[\\{\\[\\(][\\t ]*$/.test(beforeCursor)?"    ":"";
+      const insertion="\\n"+indent+extra;
+      const caret=start+insertion.length;
+      edit(text.slice(0,start)+insertion+text.slice(end),{start:caret,end:caret});
+      return;
+    }
+    const pairs:Record<string,string>={"(":")","[":"]","{":"}","\"":"\"","'":"'","\u0060":"\u0060"};
+    const closing=pairs[e.key];
+    if(closing){
+      e.preventDefault();
+      const selected=text.slice(start,end);
+      const next=text.slice(0,start)+e.key+selected+closing+text.slice(end);
+      const selection={start:start+1,end:start+1+selected.length};
+      edit(next,selection);
+    }
   };
   const toggle=(entry:FileEntry)=>{
     const next=new Set(expanded);
@@ -169,10 +243,10 @@ export default function App() {
         </div>
         {findOpen&&<div className="findbar"><div><Search size={14}/><input ref={findInput} value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש"/></div>{replaceOpen&&<div><Replace size={14}/><input value={replacement} onChange={e=>setReplacement(e.target.value)} placeholder="החלפה"/></div>}<small>{matches} התאמות</small>{replaceOpen&&<button onClick={replaceAll}>החלף הכול</button>}<button title="סגירה" onClick={()=>setFindOpen(false)}><X size={14}/></button></div>}
         {active?.id==="welcome"?<div className="welcome"><div className="welcome-card"><div className="hero-icon"><Code2 size={34}/></div><small>OFFLINE-FIRST DEVELOPMENT</small><h1>בונים. מריצים. נשארים מקומיים.</h1><p>סביבת פיתוח עצמאית, מהירה ופתוחה — בלי חשבון, בלי ענן ובלי תלות בשירות חיצוני.</p><div className="welcome-buttons"><button className="primary" onClick={newFile}><FilePlus2 size={16}/>קובץ חדש</button><button onClick={()=>void openFile()}><File size={16}/>פתיחת קובץ</button><button onClick={()=>void openFolder()}><FolderOpen size={16}/>פתיחת תיקייה</button></div><div className="features"><div><Keyboard/><b>קיצורי מקלדת</b><span>Ctrl+N קובץ חדש · Ctrl+S שמירה</span></div><div><HardDrive/><b>מקומי כברירת מחדל</b><span>הקבצים נשארים במחשב שלך</span></div><div><Activity/><b>בפיתוח פעיל</b><span>מנוע עריכה ושירותי שפה בדרך</span></div></div></div></div>:
-        <div className="editor-body"><div className="crumb">{rootName}　›　{active?.title}</div><div className="codearea" style={{fontSize}}><div className="gutter" ref={gutter}>{lines.map(n=><div key={n}>{n}</div>)}</div><textarea ref={editor} value={text} onChange={e=>edit(e.target.value)} onKeyDown={editorKey} onScroll={e=>{if(gutter.current)gutter.current.scrollTop=e.currentTarget.scrollTop;}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/></div></div>}
+        <div className="editor-body"><div className="crumb">{rootName}　›　{active?.title}</div><div className="codearea" style={{fontSize}}><div className="gutter" ref={gutter}>{lines.map(n=><div key={n}>{n}</div>)}</div><textarea ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{if(gutter.current)gutter.current.scrollTop=e.currentTarget.scrollTop;}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/></div></div>}
       </section>
     </section>
-    <footer className="status"><div><span><GitBranch size={12}/> main</span><span><Circle size={7} fill="currentColor"/> מוכן</span></div><div><span>UTF-8</span><span>CRLF</span><span>{language(active?.path??null)}</span><span><HardDrive size={12}/> Offline</span></div></footer>
+    <footer className="status"><div><span><GitBranch size={12}/> main</span><span><Circle size={7} fill="currentColor"/> מוכן</span></div><div><span>שורה {cursor.line}, עמודה {cursor.column}</span><span>UTF-8</span><span>{text.includes("\\r\\n")?"CRLF":"LF"}</span><span>{language(active?.path??null)}</span><span><HardDrive size={12}/> Offline</span></div></footer>
     {palette&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setPalette(false);}}><div className="palette"><div className="palette-search"><Command size={17}/><input ref={paletteInput} value={paletteQuery} onChange={e=>setPaletteQuery(e.target.value)} placeholder="חפש פקודה…"/></div>{filtered.map(c=><button key={c[0]} onClick={()=>run(c[0])}><span>{c[1]}</span><kbd>{c[2]}</kbd></button>)}{!filtered.length&&<p>לא נמצאו פקודות</p>}<small>ESC לסגירה · פקודות זמינות בלבד</small></div></div>}
     {toast&&<div className="toast"><Check size={15}/>{toast}</div>}
   </main>;
