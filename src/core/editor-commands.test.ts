@@ -37,7 +37,7 @@ describe("editor commands", () => {
     expect(result.text).toBe("one\\nthree\\ntwo\\n");
   });
 
-  it("does not add a final newline when moving the last line upward", () => {
+  it("does not add a final newline when moving lines in a file without one", () => {
     const result = moveLines("one\\ntwo\\nthree", 4, 7, 1);
     expect(result.text.endsWith("\\n")).toBe(false);
   });
