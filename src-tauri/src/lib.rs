@@ -66,8 +66,8 @@ fn validate_local_api_base_url(base_url: &str) -> Result<reqwest::Url, String> {
     if trimmed.is_empty() || trimmed.len() > 2_048 {
         return Err("יש להזין כתובת API מקומית תקינה.".into());
     }
-    let mut url = reqwest::Url::parse(trimmed)
-        .map_err(|_| "כתובת ה־API אינה תקינה.".to_string())?;
+    let mut url =
+        reqwest::Url::parse(trimmed).map_err(|_| "כתובת ה־API אינה תקינה.".to_string())?;
     if !matches!(url.scheme(), "http" | "https")
         || !url.username().is_empty()
         || url.password().is_some()
@@ -76,10 +76,12 @@ fn validate_local_api_base_url(base_url: &str) -> Result<reqwest::Url, String> {
     {
         return Err("יש להשתמש בכתובת HTTP(S) מקומית ללא פרטי משתמש, שאילתה או מקטע.".into());
     }
-    let host = url.host_str()
+    let host = url
+        .host_str()
         .ok_or_else(|| "כתובת ה־API חייבת לכלול מארח מקומי.".to_string())?;
     let is_loopback = host.eq_ignore_ascii_case("localhost")
-        || host.parse::<std::net::IpAddr>()
+        || host
+            .parse::<std::net::IpAddr>()
             .map(|address| address.is_loopback())
             .unwrap_or(false);
     if !is_loopback {
@@ -421,16 +423,22 @@ async fn list_local_models(
         request = request.bearer_auth(api_key.trim());
     }
     let response = request.send().await.map_err(|_| {
-        "לא ניתן להתחבר לשרת המקומי. בדקו שהוא פועל ושהכתובת כוללת את נתיב ה־API הנכון."
-            .to_string()
+        "לא ניתן להתחבר לשרת המקומי. בדקו שהוא פועל ושהכתובת כוללת את נתיב ה־API הנכון.".to_string()
     })?;
     if !response.status().is_success() {
-        return Err(format!("שרת המודלים החזיר שגיאת HTTP: {}", response.status()));
+        return Err(format!(
+            "שרת המודלים החזיר שגיאת HTTP: {}",
+            response.status()
+        ));
     }
-    let payload = response.json::<OpenAiModelsResponse>()
+    let payload = response
+        .json::<OpenAiModelsResponse>()
         .await
         .map_err(|error| format!("תשובת רשימת המודלים אינה תואמת OpenAI API: {}", error))?;
-    let mut models = payload.data.into_iter().chain(payload.models)
+    let mut models = payload
+        .data
+        .into_iter()
+        .chain(payload.models)
         .map(|model| model.id)
         .filter(|model| !model.trim().is_empty())
         .collect::<Vec<_>>();
@@ -454,11 +462,17 @@ async fn chat_local_model(
         .timeout(Duration::from_secs(180))
         .build()
         .map_err(|error| format!("יצירת חיבור מקומי נכשלה: {}", error))?;
-    let request = OpenAiChatRequest { model: &model, messages: &messages, stream: false };
-    let mut outgoing = client.post(
-        base.join("chat/completions")
-            .map_err(|error| format!("כתובת הצ'אט אינה תקינה: {}", error))?,
-    ).json(&request);
+    let request = OpenAiChatRequest {
+        model: &model,
+        messages: &messages,
+        stream: false,
+    };
+    let mut outgoing = client
+        .post(
+            base.join("chat/completions")
+                .map_err(|error| format!("כתובת הצ'אט אינה תקינה: {}", error))?,
+        )
+        .json(&request);
     if !api_key.trim().is_empty() {
         outgoing = outgoing.bearer_auth(api_key.trim());
     }
@@ -471,10 +485,14 @@ async fn chat_local_model(
         let detail = body.chars().take(240).collect::<String>();
         return Err(format!("שרת המודל החזיר HTTP {}: {}", status, detail));
     }
-    let response = response.json::<OpenAiChatResponse>()
+    let response = response
+        .json::<OpenAiChatResponse>()
         .await
         .map_err(|error| format!("תשובת המודל אינה תואמת OpenAI Chat Completions: {}", error))?;
-    response.choices.into_iter().next()
+    response
+        .choices
+        .into_iter()
+        .next()
         .map(|choice| choice.message.content)
         .ok_or_else(|| "שרת המודל החזיר תשובה ללא בחירה (choices).".into())
 }
@@ -651,7 +669,10 @@ mod tests {
             "http://[::1]:8080/v1",
             "https://127.0.0.1:9443/v1",
         ] {
-            assert!(validate_local_api_base_url(url).is_ok(), "rejected local URL: {url}");
+            assert!(
+                validate_local_api_base_url(url).is_ok(),
+                "rejected local URL: {url}"
+            );
         }
         for url in [
             "https://example.com/v1",
@@ -661,7 +682,10 @@ mod tests {
             "http://user:pass@127.0.0.1/v1",
             "http://127.0.0.1/v1?token=secret",
         ] {
-            assert!(validate_local_api_base_url(url).is_err(), "accepted unsafe URL: {url}");
+            assert!(
+                validate_local_api_base_url(url).is_err(),
+                "accepted unsafe URL: {url}"
+            );
         }
     }
 
