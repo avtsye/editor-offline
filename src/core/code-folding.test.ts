@@ -149,3 +149,37 @@ describe("explicit code regions", () => {
     });
   });
 });
+
+
+describe("Markdown and YAML folding", () => {
+  it("folds Markdown headings to the line before the next peer heading", () => {
+    const source = [
+      "# Guide",
+      "Intro",
+      "## Install",
+      "Steps",
+      "### Windows",
+      "Details",
+      "## Usage",
+      "End",
+    ].join("\n");
+    const ranges = findFoldRanges(source, "markdown");
+    expect(ranges.filter(range => range.kind === "region").map(range => [range.startLine, range.endLine, range.label]))
+      .toEqual([[1, 6, "Guide"], [3, 6, "Install"], [5, 6, "Windows"]]);
+  });
+
+  it("folds fenced Markdown code blocks and ignores headings inside them", () => {
+    const source = ["# Notes", "```ts", "# not a heading", "const x = 1;", "```", "After"].join("\n");
+    const ranges = findFoldRanges(source, "md");
+    expect(ranges).toContainEqual({ startLine: 2, endLine: 5, kind: "block", label: "code" });
+    expect(ranges.filter(range => range.kind === "region").map(range => [range.startLine, range.endLine]))
+      .toEqual([[1, 6]]);
+  });
+
+  it("folds nested YAML indentation blocks", () => {
+    const source = ["app:", "  server:", "    port: 8080", "  enabled: true", "other: value"].join("\n");
+    const ranges = findFoldRanges(source, "yaml");
+    expect(ranges).toContainEqual({ startLine: 1, endLine: 4, kind: "indent", label: "…" });
+    expect(ranges).toContainEqual({ startLine: 2, endLine: 3, kind: "indent", label: "…" });
+  });
+});
