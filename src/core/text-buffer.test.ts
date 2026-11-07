@@ -70,9 +70,9 @@ describe("TextBuffer", () => {
     expect(buffer.lineCount).toBe(4);
     expect(buffer.getLine(2)).toBe("inserted");
     expect(buffer.getLine(3)).toBe("second");
-    expect(buffer.undo()).toBe("first\\nsecond\\nthird");
+    expect(buffer.undo()).toBe("first\nsecond\nthird");
     expect(buffer.lineCount).toBe(3);
-    expect(buffer.redo()).toBe("first\\ninserted\\nsecond\\nthird");
+    expect(buffer.redo()).toBe("first\ninserted\nsecond\nthird");
     expect(buffer.lineCount).toBe(4);
   });
 
