@@ -7,7 +7,7 @@ import { tokenize } from "./core/tokenizer";
 import { sliceTokens } from "./core/token-slice";
 import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
 import { getVisibleLineRange } from "./core/viewport";
-import { indentSelection, toggleLineComment } from "./core/editor-commands";
+import { indentSelection, moveLines, toggleLineComment } from "./core/editor-commands";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
@@ -526,6 +526,7 @@ export default function App() {
       else if(mod&&e.key.toLowerCase()==="f"){e.preventDefault();setFindOpen(true);setReplaceOpen(false);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="h"){e.preventDefault();setFindOpen(true);setReplaceOpen(true);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="g"){e.preventDefault();goToLine();}
+      else if(e.altKey&&(e.key==="ArrowUp"||e.key==="ArrowDown")&&e.target===editor.current){e.preventDefault();const selected=selections.current.get(activeId)??{start:editor.current?.selectionStart??0,end:editor.current?.selectionEnd??0};const result=moveLines(text,selected.start,selected.end,e.key==="ArrowUp"?-1:1);if(result.text!==text)edit(result.text,{start:result.selectionStart,end:result.selectionEnd});}
       else if(mod&&e.key==="/"&&e.target===editor.current){e.preventDefault();const marker:Record<string,string>={js:"//",jsx:"//",ts:"//",tsx:"//",py:"#",rs:"//",go:"//",java:"//",cs:"//",c:"//",cpp:"//",h:"//",hpp:"//",dart:"//",css:"//",sql:"--",sh:"#",bash:"#",ps1:"#",yaml:"#",yml:"#",toml:"#"};const selected=selections.current.get(activeId)??{start:editor.current?.selectionStart??0,end:editor.current?.selectionEnd??0};const token=marker[languageId(active?.path??null)];if(token){const result=toggleLineComment(text,selected.start,selected.end,token);edit(result.text,{start:result.selectionStart,end:result.selectionEnd});}}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="a"){e.preventDefault();setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);}
       else if(mod&&e.key==="`"){e.preventDefault();setTerminalOpen(v=>!v);}
