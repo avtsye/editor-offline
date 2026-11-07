@@ -112,7 +112,8 @@ export function insertSmartNewline(text: string, start: number, end: number, ind
   const trimmedBefore = before.trimEnd();
   const trimmedAfter = after.trimStart();
   const opens = /[{\[(]$/.test(trimmedBefore);
-  const closes = trimmedAfter.startsWith("}") || trimmedAfter.startsWith("]") || trimmedAfter.startsWith(")");
+  const firstNonIndent = after.search(/[^\\t ]/);
+  const closes = firstNonIndent >= 0 && ["}", "]", ")"].includes(after[firstNonIndent]);
 
   if (opens && closes) {
     const insertion = "\n" + indent + indentUnit + "\n" + indent;
