@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { tokenize } from "./tokenizer";
 import { findMatchingBrackets } from "./bracket-matching";
+import { findDelimiterDiagnostics } from "./syntax-diagnostics";
 
 describe("tokenize", () => {
   it("recognizes JavaScript keywords, calls, strings and comments", () => {
@@ -67,5 +68,34 @@ describe("bracket matching", () => {
     const tokens = tokenize("const value = (1;", "typescript");
     expect(findMatchingBrackets(tokens, 14)).toBeNull();
     expect(findMatchingBrackets(tokens, 0)).toBeNull();
+  });
+});
+
+describe("syntax delimiter diagnostics", () => {
+  const diagnose = (source: string, language = "typescript") =>
+    findDelimiterDiagnostics(source, tokenize(source, language), language);
+
+  it("reports unmatched closing and unclosed opening delimiters with positions", () => {
+    const diagnostics = diagnose("run(]\\nnext({");
+    expect(diagnostics.map(item => [item.offset, item.line, item.column])).toEqual([
+      [4, 1, 5],
+      [10, 2, 6],
+    ]);
+    expect(diagnostics.map(item => item.severity)).toEqual(["error", "error"]);
+  });
+
+  it("ignores delimiter characters in strings and comments", () => {
+    const source = 'const text = "not a }"; // nor a ]\\nrun({ value: 1 });';
+    expect(diagnose(source)).toEqual([]);
+  });
+
+  it("does not lint prose-oriented files", () => {
+    expect(diagnose("This text has (an unmatched bracket", "markdown")).toEqual([]);
+  });
+
+  it("reports an inner mismatched opener while preserving a matching outer pair", () => {
+    const diagnostics = diagnose("({])");
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].offset).toBe(1);
   });
 });
