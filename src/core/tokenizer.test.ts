@@ -82,7 +82,7 @@ describe("syntax delimiter diagnostics", () => {
       [4, 1, 5],
       [10, 2, 5],
     ]);
-    expect(diagnostics.map(item => item.severity)).toEqual(["error", "error"]);
+    expect(diagnostics.map(item => item.severity)).toEqual(["error", "error", "error"]);
   });
 
   it("ignores delimiter characters in strings and comments", () => {
