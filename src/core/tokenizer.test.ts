@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { tokenize } from "./tokenizer";
+import { findMatchingBrackets } from "./bracket-matching";
 
 describe("tokenize", () => {
   it("recognizes JavaScript keywords, calls, strings and comments", () => {
@@ -38,5 +39,33 @@ describe("tokenize", () => {
 
   it("returns no tokens for an empty source", () => {
     expect(tokenize("", "javascript")).toEqual([]);
+  });
+});
+
+describe("bracket matching", () => {
+  it("matches nested brackets in both directions", () => {
+    const source = "call([value, { enabled: true }])";
+    const tokens = tokenize(source, "typescript");
+    const outerOpen = source.indexOf("(");
+    const outerClose = source.lastIndexOf(")");
+    const innerOpen = source.indexOf("{");
+    const innerClose = source.indexOf("}");
+    expect(findMatchingBrackets(tokens, outerOpen)).toEqual([outerOpen, outerClose]);
+    expect(findMatchingBrackets(tokens, innerClose + 1)).toEqual([innerOpen, innerClose]);
+  });
+
+  it("ignores bracket characters inside strings and comments", () => {
+    const source = 'const text = "not a }"; // nor a ]\nrun({ value: 1 });';
+    const tokens = tokenize(source, "typescript");
+    const open = source.lastIndexOf("{");
+    const close = source.indexOf("}", open);
+    expect(findMatchingBrackets(tokens, open)).toEqual([open, close]);
+    expect(findMatchingBrackets(tokens, source.indexOf("}") + 1)).toBeNull();
+  });
+
+  it("returns null for unmatched or non-bracket positions", () => {
+    const tokens = tokenize("const value = (1;", "typescript");
+    expect(findMatchingBrackets(tokens, 14)).toBeNull();
+    expect(findMatchingBrackets(tokens, 0)).toBeNull();
   });
 });
