@@ -210,8 +210,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_directory_in_directory, create_file_in_directory, delete_path,
-        limit_command_output, rename_path, validate_child_name,
+        create_directory_in_directory, create_file_in_directory, delete_path, limit_command_output,
+        rename_path, validate_child_name,
     };
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
