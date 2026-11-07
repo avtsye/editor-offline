@@ -104,8 +104,9 @@ fn validate_local_api_base_url(base_url: &str) -> Result<reqwest::Url, String> {
     let host = url
         .host_str()
         .ok_or_else(|| "כתובת ה־API חייבת לכלול מארח מקומי.".to_string())?;
-    let is_loopback = host.eq_ignore_ascii_case("localhost")
-        || host
+    let normalized_host = host.trim_start_matches('[').trim_end_matches(']');
+    let is_loopback = normalized_host.eq_ignore_ascii_case("localhost")
+        || normalized_host
             .parse::<std::net::IpAddr>()
             .map(|address| address.is_loopback())
             .unwrap_or(false);
@@ -567,7 +568,11 @@ async fn chat_local_model(
     let request = AnthropicChatRequest {
         model,
         max_tokens: 4_096,
-        system: if system.is_empty() { None } else { Some(system) },
+        system: if system.is_empty() {
+            None
+        } else {
+            Some(system)
+        },
         messages: conversation,
     };
     let mut outgoing = client
@@ -634,8 +639,8 @@ pub fn run() {
 mod tests {
     use super::{
         append_search_matches, create_directory_in_directory, create_file_in_directory,
-        delete_path, limit_command_output, rename_path, search_directory, validate_child_name,
-        local_api_endpoint, validate_local_api_base_url, validate_local_api_protocol,
+        delete_path, limit_command_output, local_api_endpoint, rename_path, search_directory,
+        validate_child_name, validate_local_api_base_url, validate_local_api_protocol,
         validate_local_chat_request, LocalChatMessage,
     };
     use std::path::{Path, PathBuf};
@@ -771,8 +776,14 @@ mod tests {
     fn local_api_endpoint_supports_root_and_v1_base_urls() {
         let root = validate_local_api_base_url("http://127.0.0.1:1337").unwrap();
         let versioned = validate_local_api_base_url("http://127.0.0.1:1337/v1").unwrap();
-        assert_eq!(local_api_endpoint(&root, "messages").unwrap().path(), "/v1/messages");
-        assert_eq!(local_api_endpoint(&versioned, "messages").unwrap().path(), "/v1/messages");
+        assert_eq!(
+            local_api_endpoint(&root, "messages").unwrap().path(),
+            "/v1/messages"
+        );
+        assert_eq!(
+            local_api_endpoint(&versioned, "messages").unwrap().path(),
+            "/v1/messages"
+        );
     }
 
     #[test]
