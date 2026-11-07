@@ -7,7 +7,7 @@ Editor Offline is an original desktop application, not a distribution of VS Code
 ## Current layers
 
 1. **Desktop host — Tauri 2 / Rust**
-   - Owns native dialogs and local filesystem operations, including safe create, rename, and delete operations.
+   - Owns native dialogs and local filesystem operations, including safe create, rename, delete, and bounded project-search operations.
    - Exposes a small command surface to the UI.
    - Does not send project content to a server.
 2. **Workbench — React / TypeScript**

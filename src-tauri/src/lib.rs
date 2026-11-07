@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Debug, Serialize)]
@@ -16,6 +16,117 @@ struct CommandOutput {
     stderr: String,
     exit_code: Option<i32>,
     success: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct SearchResult {
+    path: String,
+    line_number: usize,
+    preview: String,
+}
+
+fn append_search_matches(path: &Path, content: &str, query: &str, results: &mut Vec<SearchResult>) {
+    for (index, line) in content.lines().enumerate() {
+        if line.to_lowercase().contains(query) {
+            results.push(SearchResult {
+                path: path.to_string_lossy().to_string(),
+                line_number: index + 1,
+                preview: line.chars().take(240).collect(),
+            });
+            if results.len() >= 500 {
+                return;
+            }
+        }
+    }
+}
+
+fn search_directory(
+    directory: &Path,
+    query: &str,
+    results: &mut Vec<SearchResult>,
+    files_scanned: &mut usize,
+    depth: usize,
+) {
+    const MAX_DEPTH: usize = 24;
+    const MAX_FILES: usize = 20_000;
+    const MAX_FILE_BYTES: u64 = 1_048_576;
+    const SKIP_DIRECTORIES: [&str; 10] = [
+        ".git",
+        ".idea",
+        ".next",
+        ".venv",
+        "build",
+        "coverage",
+        "dist",
+        "node_modules",
+        "target",
+        "venv",
+    ];
+
+    if depth > MAX_DEPTH || results.len() >= 500 || *files_scanned >= MAX_FILES {
+        return;
+    }
+
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        if results.len() >= 500 || *files_scanned >= MAX_FILES {
+            break;
+        }
+
+        let path = entry.path();
+        let file_type = match entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(_) => continue,
+        };
+
+        if file_type.is_dir() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if SKIP_DIRECTORIES.contains(&name.as_str()) {
+                continue;
+            }
+            search_directory(&path, query, results, files_scanned, depth + 1);
+        } else if file_type.is_file() {
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(_) => continue,
+            };
+            if metadata.len() > MAX_FILE_BYTES {
+                continue;
+            }
+
+            *files_scanned += 1;
+            if let Ok(content) = fs::read_to_string(&path) {
+                append_search_matches(&path, &content, query, results);
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn search_workspace(directory: String, query: String) -> Result<Vec<SearchResult>, String> {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return Err("יש להזין טקסט לחיפוש.".into());
+    }
+
+    let root = PathBuf::from(directory);
+    if !root.is_dir() {
+        return Err("תיקיית העבודה אינה קיימת.".into());
+    }
+
+    let mut results = Vec::new();
+    let mut files_scanned = 0;
+    search_directory(&root, &query, &mut results, &mut files_scanned, 0);
+    results.sort_by(|a, b| {
+        a.path
+            .cmp(&b.path)
+            .then_with(|| a.line_number.cmp(&b.line_number))
+    });
+    Ok(results)
 }
 
 fn limit_command_output(mut value: String) -> String {
@@ -201,6 +312,7 @@ pub fn run() {
             rename_path,
             delete_path,
             run_workspace_command,
+            search_workspace,
             get_app_version
         ])
         .run(tauri::generate_context!())
@@ -304,5 +416,19 @@ mod tests {
         let output = limit_command_output("א".repeat(70_000));
         assert!(output.contains("[הפלט נחתך לאחר 128 KB]"));
         assert!(output.is_char_boundary(output.len()));
+    }
+
+    #[test]
+    fn project_search_is_case_insensitive_and_uses_one_based_lines() {
+        let mut results = Vec::new();
+        append_search_matches(
+            Path::new("src/main.rs"),
+            "fn main() {\\n    let Value = 1;\\n    println!(\"done\");\\n}",
+            "value",
+            &mut results,
+        );
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].line_number, 2);
+        assert!(results[0].preview.contains("Value"));
     }
 }

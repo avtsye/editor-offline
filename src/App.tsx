@@ -11,6 +11,7 @@ import { getVisibleLineRange } from "./core/viewport";
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
 type CommandResult = { stdout: string; stderr: string; exit_code: number | null; success: boolean };
+type ProjectSearchResult = { path: string; line_number: number; preview: string };
 const WELCOME = ["ברוכים הבאים ל־Editor Offline", "", "סביבת פיתוח עצמאית, מקומית וקלה.", "", "פתחו קובץ או תיקייה כדי להתחיל לעבוד.", "זהו שלב הבסיס של סביבת הפיתוח; מנוע העריכה ושירותי השפה מתפתחים בהדרגה."].join("\n");
 const FILTERS = [{ name: "קובצי קוד וטקסט", extensions: ["txt","md","js","jsx","ts","tsx","py","rs","json","html","css","toml","yaml","yml","xml","c","h","cpp","hpp","cs","java","dart","go","php","sql","sh","bat","ps1"] }, { name: "כל הקבצים", extensions: ["*"] }];
 const id = () => globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
@@ -42,6 +43,10 @@ export default function App() {
   const [palette,setPalette] = useState(false);
   const [paletteQuery,setPaletteQuery] = useState("");
   const [sidebar,setSidebar] = useState(true);
+  const [sidebarView,setSidebarView] = useState<"files"|"search">("files");
+  const [projectSearchQuery,setProjectSearchQuery] = useState("");
+  const [projectSearchResults,setProjectSearchResults] = useState<ProjectSearchResult[]>([]);
+  const [projectSearchBusy,setProjectSearchBusy] = useState(false);
   const [toast,setToast] = useState("");
   const [fontSize,setFontSize] = useState(14);
   const [cursor,setCursor] = useState({line:1,column:1});
@@ -51,6 +56,7 @@ export default function App() {
   const highlight = useRef<HTMLPreElement>(null);
   const findInput = useRef<HTMLInputElement>(null);
   const paletteInput = useRef<HTMLInputElement>(null);
+  const projectSearchInput = useRef<HTMLInputElement>(null);
   const buffers = useRef(new Map<string, TextBuffer>([["welcome", new TextBuffer(WELCOME)]]));
   const selections = useRef(new Map<string, { start: number; end: number }>());
   const desktop = isTauri();
@@ -86,7 +92,7 @@ export default function App() {
       });
     }
   };
-  const openPath = async (path:string) => {
+  const openPath = async (path:string,targetLine?:number) => {
     try {
       const content = await invoke<string>("read_text_file",{path});
       const old = tabs.find(t=>t.path===path);
@@ -94,14 +100,20 @@ export default function App() {
         setActiveId(old.id);
         const model=buffers.current.get(old.id)??new TextBuffer(old.content);
         buffers.current.set(old.id,model);
-        const selection=selections.current.get(old.id)??{start:0,end:0};
-        setCursor(model.positionAt(selection.start));
+        const offset=targetLine?model.getLineStart(targetLine):(selections.current.get(old.id)??{start:0,end:0}).start;
+        const selection={start:offset,end:offset};
+        selections.current.set(old.id,selection);
+        setCursor(model.positionAt(offset));
+        window.requestAnimationFrame(()=>{editor.current?.focus();editor.current?.setSelectionRange(offset,offset);});
         return;
       }
       const tab:Tab={id:id(),path,title:path.split(/[\\/]/).pop()||"קובץ",content,saved:content,dirty:false};
-      buffers.current.set(tab.id,new TextBuffer(content));
-      selections.current.set(tab.id,{start:0,end:0});
-      setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursor({line:1,column:1});setFindOpen(false);
+      const model=new TextBuffer(content);
+      const offset=targetLine?model.getLineStart(targetLine):0;
+      buffers.current.set(tab.id,model);
+      selections.current.set(tab.id,{start:offset,end:offset});
+      setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursor(model.positionAt(offset));setFindOpen(false);
+      if(targetLine)window.requestAnimationFrame(()=>{editor.current?.focus();editor.current?.setSelectionRange(offset,offset);});
     } catch(e){notify("פתיחת הקובץ נכשלה: "+String(e));}
   };
   const openFile = async () => {
@@ -204,6 +216,18 @@ export default function App() {
     }catch(error){notify("המחיקה נכשלה: "+String(error));}
   };
 
+  const runProjectSearch=async()=>{
+    const searchTerm=projectSearchQuery.trim();
+    if(!searchTerm)return;
+    if(!desktop||!root){notify("יש לפתוח תיקיית עבודה לפני חיפוש בפרויקט");return;}
+    setProjectSearchBusy(true);
+    try{
+      const results=await invoke<ProjectSearchResult[]>("search_workspace",{directory:root,query:searchTerm});
+      setProjectSearchResults(results);
+      if(!results.length)notify("לא נמצאו תוצאות בפרויקט");
+    }catch(error){notify("החיפוש בפרויקט נכשל: "+String(error));}
+    finally{setProjectSearchBusy(false);}
+  };
   const runWorkspaceCommand=async()=>{
     const command=commandInput.trim();
     if(!command)return;
@@ -332,7 +356,7 @@ export default function App() {
   };
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
-    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
+    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="search-workspace"){setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);} if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
     if(cmd==="find"||cmd==="replace"){setFindOpen(true);setReplaceOpen(cmd==="replace");window.setTimeout(()=>findInput.current?.focus(),0);}
     if(cmd==="goto")goToLine();
     if(cmd==="zoom+")setFontSize(v=>Math.min(22,v+1));if(cmd==="zoom-")setFontSize(v=>Math.max(11,v-1));
@@ -353,6 +377,7 @@ export default function App() {
       else if(mod&&e.key.toLowerCase()==="n"){e.preventDefault();newFile();}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="o"){e.preventDefault();void openFolder();}
       else if(mod&&e.key.toLowerCase()==="o"){e.preventDefault();void openFile();}
+      else if(mod&&e.shiftKey&&e.key.toLowerCase()==="f"){e.preventDefault();setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="f"){e.preventDefault();setFindOpen(true);setReplaceOpen(false);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="h"){e.preventDefault();setFindOpen(true);setReplaceOpen(true);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="g"){e.preventDefault();goToLine();}
@@ -408,7 +433,7 @@ export default function App() {
     <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
     <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
-  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
+  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["search-workspace","חיפוש בפרויקט","Ctrl+Shift+F"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
   const filtered=commands.filter(c=>c[1].includes(paletteQuery));
 
   return <main className="app" dir="rtl">
@@ -420,13 +445,22 @@ export default function App() {
       </div>
     </header>
     <section className="workbench">
-      <nav className="activity"><button className="chosen" title="סייר קבצים" onClick={()=>setSidebar(true)}><Files/></button><button title="חיפוש" onClick={()=>{setSidebar(true);setFindOpen(true);}}><Search/></button><div/><button title="הגדלת גופן" onClick={()=>setFontSize(v=>Math.min(22,v+1))}><Settings2/></button><span>EO</span></nav>
+      <nav className="activity"><button className={sidebarView==="files"?"chosen":""} title="סייר קבצים" onClick={()=>{setSidebar(true);setSidebarView("files");}}><Files/></button><button className={sidebarView==="search"?"chosen":""} title="חיפוש בפרויקט · Ctrl+Shift+F" onClick={()=>{setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);}}><Search/></button><div/><button title="הגדלת גופן" onClick={()=>setFontSize(v=>Math.min(22,v+1))}><Settings2/></button><span>EO</span></nav>
       {sidebar&&<aside className="sidebar">
-        <div className="side-title">סייר <button title="הסתרת סרגל" onClick={()=>setSidebar(false)}><PanelRightClose size={15}/></button></div>
-        <div className="section-title"><span title={activeDirectory??rootName}>{activeDirectory?.split(/[\\/]/).filter(Boolean).pop()??rootName}</span><div className="section-actions"><button title="קובץ חדש בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFile()}><FilePlus2 size={14}/></button><button title="תיקייה חדשה בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFolder()}><FolderPlus size={14}/></button><button title="רענון תיקייה" disabled={!activeDirectory} onClick={()=>activeDirectory&&void readDir(activeDirectory)}><RotateCw size={14}/></button></div></div>
+        <div className="side-title">{sidebarView==="files"?"סייר":"חיפוש בפרויקט"} <button title="הסתרת סרגל" onClick={()=>setSidebar(false)}><PanelRightClose size={15}/></button></div>
+        {sidebarView==="files"?<><div className="section-title"><span title={activeDirectory??rootName}>{activeDirectory?.split(/[\\/]/).filter(Boolean).pop()??rootName}</span><div className="section-actions"><button title="קובץ חדש בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFile()}><FilePlus2 size={14}/></button><button title="תיקייה חדשה בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFolder()}><FolderPlus size={14}/></button><button title="רענון תיקייה" disabled={!activeDirectory} onClick={()=>activeDirectory&&void readDir(activeDirectory)}><RotateCw size={14}/></button></div></div>
         <div className="tree">{root?(cache[root]?tree(cache[root]):<p>טוען תיקייה…</p>):<div className="empty"><FolderOpen size={27}/><span>עדיין לא נפתחה תיקיית עבודה</span><button onClick={()=>void openFolder()}>פתיחת תיקייה</button></div>}</div>
-        <div className="open-tabs"><div className="section-title">קבצים פתוחים <span>{tabs.length}</span></div>{tabs.map(t=><button key={t.id} className={t.id===activeId?"on":""} onClick={()=>switchTab(t)}><FileCode2 size={14}/>{t.title}{t.dirty&&<Circle size={7} fill="currentColor"/>}</button>)}</div>
-      </aside>}
+        <div className="open-tabs"><div className="section-title">קבצים פתוחים <span>{tabs.length}</span></div>{tabs.map(t=><button key={t.id} className={t.id===activeId?"on":""} onClick={()=>switchTab(t)}><FileCode2 size={14}/>{t.title}{t.dirty&&<Circle size={7} fill="currentColor"/>}</button>)}</div></>:<div className="project-search">
+          <form className="project-search-form" onSubmit={event=>{event.preventDefault();void runProjectSearch();}}>
+            <input ref={projectSearchInput} value={projectSearchQuery} onChange={event=>setProjectSearchQuery(event.target.value)} placeholder="חיפוש בכל קובצי הפרויקט…" />
+            <button type="submit" disabled={projectSearchBusy||!projectSearchQuery.trim()}><Search size={14}/></button>
+          </form>
+          <div className="search-summary">{projectSearchBusy?"מחפש…":projectSearchResults.length?projectSearchResults.length+" תוצאות (עד 500)": "Ctrl+Shift+F · חיפוש בתוכן הקבצים"}</div>
+          <div className="project-results">{projectSearchResults.map((result,index)=><button key={result.path+":"+result.line_number+":"+index} onClick={()=>void openPath(result.path,result.line_number)}>
+            <b>{result.path.split(/[\\/]/).pop()}</b><small>שורה {result.line_number} · {result.preview}</small><em>{result.path}</em>
+          </button>)}</div>
+        </div>}
+      </aside>
       <section className="editor">
         <div className="tabs">{tabs.map(t=><div key={t.id} className={"tab"+(t.id===activeId?" active":"")} onClick={()=>switchTab(t)}><FileCode2 size={14}/><span>{t.title}</span>{t.dirty&&<Circle size={8} fill="currentColor"/>}<button title="סגירה" onClick={e=>{e.stopPropagation();closeTab(t);}}><X size={13}/></button></div>)}
           <button className="side-toggle" title="הצגה/הסתרת סרגל" onClick={()=>setSidebar(v=>!v)}><PanelRightClose size={15}/></button>
