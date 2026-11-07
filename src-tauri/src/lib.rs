@@ -1,6 +1,5 @@
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
 
 #[derive(Debug, Serialize)]
 struct FileEntry {
@@ -25,11 +24,12 @@ fn read_directory(path: String) -> Result<Vec<FileEntry>, String> {
     let mut result = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| error.to_string())?;
-        let metadata = entry.metadata().map_err(|error| error.to_string())?;
+        let file_type = entry.file_type().map_err(|error| error.to_string())?;
         result.push(FileEntry {
             name: entry.file_name().to_string_lossy().to_string(),
             path: entry.path().to_string_lossy().to_string(),
-            is_dir: metadata.is_dir(),
+            // Do not follow directory symlinks: a workspace can contain cycles.
+            is_dir: file_type.is_dir(),
         });
     }
     result.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
