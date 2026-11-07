@@ -23,6 +23,9 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Dependency security audit
+        run: npm audit --json
+        continue-on-error: true
       - name: TypeScript check
         run: npm run check
       - name: Unit tests
