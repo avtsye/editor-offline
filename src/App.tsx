@@ -497,6 +497,13 @@ export default function App() {
     if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="search-workspace"){setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);} if(cmd==="local-ai"){setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);} if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
     if(cmd==="find"||cmd==="replace"){setFindOpen(true);setReplaceOpen(cmd==="replace");window.setTimeout(()=>findInput.current?.focus(),0);}
     if(cmd==="goto")goToLine();
+    if(cmd==="comment"){
+      const marker:Record<string,string>={js:"//",jsx:"//",ts:"//",tsx:"//",py:"#",rs:"//",go:"//",java:"//",cs:"//",c:"//",cpp:"//",h:"//",hpp:"//",dart:"//",css:"//",sql:"--",sh:"#",bash:"#",ps1:"#",yaml:"#",yml:"#",toml:"#"};
+      const selection=selections.current.get(activeId)??{start:editor.current?.selectionStart??0,end:editor.current?.selectionEnd??0};
+      const token=marker[languageId(active?.path??null)];
+      if(token){const result=toggleLineComment(text,selection.start,selection.end,token);edit(result.text,{start:result.selectionStart,end:result.selectionEnd});editor.current?.focus();}
+      else notify("שפת הקובץ אינה תומכת כרגע בהערות שורה");
+    }
     if(cmd==="zoom+")setFontSize(v=>Math.min(22,v+1));if(cmd==="zoom-")setFontSize(v=>Math.max(11,v-1));
   };
   useEffect(()=>{
@@ -606,7 +613,7 @@ export default function App() {
     <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
     <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
-  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["search-workspace","חיפוש בפרויקט","Ctrl+Shift+F"],["local-ai","עוזר AI מקומי","Ctrl+Shift+A"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
+  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["search-workspace","חיפוש בפרויקט","Ctrl+Shift+F"],["local-ai","עוזר AI מקומי","Ctrl+Shift+A"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["comment","הערה/ביטול הערה בשורות","Ctrl+/"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
   const filtered=commands.filter(c=>c[1].includes(paletteQuery));
 
   return <main className="app" dir="rtl">
