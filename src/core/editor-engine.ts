@@ -87,19 +87,25 @@ export class EditorEngine {
   }
 
   applyEdits(edits: EditorEdit[]): string {
-    const sorted = [...edits]
+    const ascending = [...edits]
       .map(edit => ({ from: clamp(edit.from, this.buffer.length), to: clamp(edit.to, this.buffer.length), insert: edit.insert }))
       .map(edit => ({ ...edit, from: Math.min(edit.from, edit.to), to: Math.max(edit.from, edit.to) }))
-      .sort((a, b) => b.from - a.from || b.to - a.to);
-    let nextSelections: EditorSelection[] = [];
-    let previousFrom = Number.POSITIVE_INFINITY;
-    for (const edit of sorted) {
-      if (edit.to > previousFrom) continue;
-      this.buffer.replaceRange(edit.from, edit.to, edit.insert);
-      nextSelections.push({ anchor: edit.from + edit.insert.length, head: edit.from + edit.insert.length });
-      previousFrom = edit.from;
+      .sort((a, b) => a.from - b.from || a.to - b.to);
+    const accepted: EditorEdit[] = [];
+    for (const edit of ascending) {
+      const previous = accepted[accepted.length - 1];
+      if (previous && edit.from < previous.to) continue;
+      accepted.push(edit);
     }
-    nextSelections.reverse();
+    for (const edit of [...accepted].reverse()) {
+      this.buffer.replaceRange(edit.from, edit.to, edit.insert);
+    }
+    let shift = 0;
+    const nextSelections = accepted.map(edit => {
+      const caret = edit.from + shift + edit.insert.length;
+      shift += edit.insert.length - (edit.to - edit.from);
+      return { anchor: caret, head: caret };
+    });
     this.setSelections(nextSelections);
     return this.getText();
   }
