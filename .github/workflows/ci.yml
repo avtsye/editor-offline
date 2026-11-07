@@ -44,3 +44,28 @@ jobs:
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  windows-installers:
+    name: Build Windows installers
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: npm install
+      - name: Build MSI and NSIS installers
+        run: npm run tauri build
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-offline-windows-0.1.0
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
