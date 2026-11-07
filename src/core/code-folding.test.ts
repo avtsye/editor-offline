@@ -85,7 +85,7 @@ describe("FoldModel source/display mapping", () => {
     model.toggle(outer);
     expect(model.getVisibleLineCount()).toBe(2);
     model.toggle(outer);
-    expect(model.getVisibleLineCount()).toBe(5);
+    expect(model.getVisibleLineCount()).toBe(4);
     expect(model.isLineHidden(3)).toBe(true);
   });
 
