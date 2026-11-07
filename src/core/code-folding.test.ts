@@ -36,7 +36,7 @@ describe("code folding ranges", () => {
 describe("FoldModel", () => {
   it("projects folded blocks without changing source text or offsets", async () => {
     const { FoldModel } = await import("./code-folding");
-    const source = "function run() {\\n  first();\\n  second();\\n}\\nafter();";
+    const source = "function run() {\n  first();\n  second();\n}\nafter();";
     const model = new FoldModel(source, "javascript");
     const range = model.getRanges()[0];
     expect(model.toggle(range)).toBe(true);
@@ -50,7 +50,7 @@ describe("FoldModel", () => {
   });
   it("reveals hidden lines on navigation", async () => {
     const { FoldModel } = await import("./code-folding");
-    const model = new FoldModel("if (ok) {\\n  nested();\\n}\\nnext();", "javascript");
+    const model = new FoldModel("if (ok) {\n  nested();\n}\nnext();", "javascript");
     model.collapseAll();
     expect(model.getVisibleLineCount()).toBe(2);
     model.revealLine(2);
@@ -58,7 +58,7 @@ describe("FoldModel", () => {
   });
   it("supports collapse all and expand all", async () => {
     const { FoldModel } = await import("./code-folding");
-    const model = new FoldModel("a {\\n b {\\n  c();\\n }\\n}", "javascript");
+    const model = new FoldModel("a {\n b {\n  c();\n }\n}", "javascript");
     model.collapseAll();
     expect(model.getVisibleLineCount()).toBe(1);
     model.expandAll();

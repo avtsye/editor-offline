@@ -131,7 +131,7 @@ export class FoldModel {
     this.languageId = languageId;
     this.lineStarts = [0];
     for (let index = 0; index < source.length; index += 1) {
-      if (source[index] === "\\n") this.lineStarts.push(index + 1);
+      if (source[index] === "\n") this.lineStarts.push(index + 1);
     }
     this.ranges = findFoldRanges(source, languageId);
     const valid = new Set(this.ranges.map(range => this.lineStarts[range.startLine - 1] ?? -1));
