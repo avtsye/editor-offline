@@ -7,7 +7,7 @@ import { tokenize } from "./core/tokenizer";
 import { sliceTokens } from "./core/token-slice";
 import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
 import { getVisibleLineRange } from "./core/viewport";
-import { deleteLines, duplicateLines, indentSelection, moveLines, toggleLineComment } from "./core/editor-commands";
+import { deleteLines, duplicateLines, indentSelection, insertSmartNewline, moveLines, toggleLineComment } from "./core/editor-commands";
 import { detectProjectTasks, type ProjectTask } from "./core/project-tasks";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
@@ -620,15 +620,8 @@ export default function App() {
     }
     if(e.key==="Enter"){
       e.preventDefault();
-      const lineStart=start===0?0:text.lastIndexOf("\n",start-1)+1;
-      const beforeCursor=text.slice(lineStart,start);
-      const indent=beforeCursor.match(/^[\t ]*/)?.[0]??"";
-      const opensEmptyBlock=beforeCursor.trimEnd().endsWith("{")&&text.slice(end).startsWith("}");
-      const insertion=opensEmptyBlock
-        ? "\n"+indent+"    "+"\n"+indent
-        : "\n"+indent+(/[{\[(][\t ]*$/.test(beforeCursor)?"    ":"");
-      const caret=opensEmptyBlock?start+1+indent.length+4:start+insertion.length;
-      edit(text.slice(0,start)+insertion+text.slice(end),{start:caret,end:caret});
+      const result=insertSmartNewline(text,start,end);
+      edit(result.text,{start:result.selectionStart,end:result.selectionEnd});
       return;
     }
     if(closingPairs.has(e.key)&&start===end&&text[start]===e.key){
