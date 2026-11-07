@@ -356,7 +356,6 @@ fn delete_path(path: String) -> Result<(), String> {
     }
 }
 
-
 #[tauri::command]
 async fn list_local_models() -> Result<Vec<String>, String> {
     let client = reqwest::Client::builder()
@@ -367,7 +366,10 @@ async fn list_local_models() -> Result<Vec<String>, String> {
         .get("http://127.0.0.1:11434/api/tags")
         .send()
         .await
-        .map_err(|_| "לא ניתן להתחבר ל־Ollama בכתובת המקומית 127.0.0.1:11434. יש לוודא שהוא פועל.".to_string())?;
+        .map_err(|_| {
+            "לא ניתן להתחבר ל־Ollama בכתובת המקומית 127.0.0.1:11434. יש לוודא שהוא פועל."
+                .to_string()
+        })?;
     if !response.status().is_success() {
         return Err(format!("Ollama החזיר שגיאת HTTP: {}", response.status()));
     }
@@ -385,7 +387,10 @@ async fn list_local_models() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-async fn chat_local_model(model: String, messages: Vec<LocalChatMessage>) -> Result<String, String> {
+async fn chat_local_model(
+    model: String,
+    messages: Vec<LocalChatMessage>,
+) -> Result<String, String> {
     validate_local_chat_request(&model, &messages)?;
 
     let client = reqwest::Client::builder()
@@ -402,7 +407,9 @@ async fn chat_local_model(model: String, messages: Vec<LocalChatMessage>) -> Res
         .json(&request)
         .send()
         .await
-        .map_err(|_| "הבקשה למודל המקומי נכשלה. בדקו ש־Ollama עדיין פועל.".to_string())?;
+        .map_err(|_| {
+            "הבקשה למודל המקומי נכשלה. בדקו ש־Ollama עדיין פועל.".to_string()
+        })?;
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
