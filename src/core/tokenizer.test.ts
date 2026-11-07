@@ -52,7 +52,7 @@ describe("bracket matching", () => {
     const innerOpen = source.indexOf("{");
     const innerClose = source.indexOf("}");
     expect(findMatchingBrackets(tokens, outerOpen)).toEqual([outerOpen, outerClose]);
-    expect(findMatchingBrackets(tokens, innerClose + 1)).toEqual([innerOpen, innerClose]);
+    expect(findMatchingBrackets(tokens, innerClose)).toEqual([innerOpen, innerClose]);
   });
 
   it("ignores bracket characters inside strings and comments", () => {
