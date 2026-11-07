@@ -66,8 +66,14 @@ function readLine(source: string, start: number): number {
 
 export function tokenize(source: string, languageId: string): SyntaxToken[] {
   if (!source) return [];
-  const lang = languageId.toLowerCase();
-  const keywords = KEYWORDS[lang] ?? KEYWORDS.javascript;
+  const requestedLanguage = languageId.toLowerCase();
+  const aliases: Record<string, string> = {
+    js: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript",
+    py: "python", rs: "rust", c: "c", h: "c", cc: "cpp", cpp: "cpp", hpp: "cpp",
+    cs: "csharp", html: "html", xml: "html", yml: "plain", yaml: "plain",
+  };
+  const lang = aliases[requestedLanguage] ?? requestedLanguage;
+  const keywords = KEYWORDS[lang] ?? new Set<string>();
   const tokens: SyntaxToken[] = [];
   let index = 0;
   let insideHtmlTag = false;
