@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deleteLines, duplicateLines, indentSelection, moveLines, toggleLineComment } from "./editor-commands";
+import { deleteLines, duplicateLines, indentSelection, insertSmartNewline, moveLines, toggleLineComment } from "./editor-commands";
 
 describe("editor commands", () => {
   it("indents every selected line and preserves the selection", () => {
@@ -61,4 +61,32 @@ describe("editor commands", () => {
     expect(result.selectionStart).toBe(10);
     expect(result.selectionEnd).toBe(13);
   });
+  it("adds an indented line inside an empty brace pair", () => {
+    const result = insertSmartNewline("if (ready) {\\n}", 12, 12);
+    expect(result.text).toBe("if (ready) {\\n    \\n}");
+    expect(result.selectionStart).toBe(17);
+    expect(result.selectionEnd).toBe(17);
+  });
+
+  it("keeps a closing brace at the outer indentation when splitting before it", () => {
+    const source = "function run() {\\n    }";
+    const caret = source.indexOf("}");
+    const result = insertSmartNewline(source, caret, caret);
+    expect(result.text).toBe("function run() {\\n    \\n        }");
+    expect(result.selectionStart).toBe(26);
+  });
+
+  it("preserves indentation on ordinary Enter and indents after an opener", () => {
+    expect(insertSmartNewline("    const value = 1;", 4, 4).text)
+      .toBe("    \\n    const value = 1;");
+    expect(insertSmartNewline("    call(", 9, 9).text)
+      .toBe("    call(\\n        ");
+  });
+
+  it("replaces a selected range with one smart newline", () => {
+    const result = insertSmartNewline("alpha beta", 5, 10);
+    expect(result.text).toBe("alpha\\n");
+    expect(result.selectionStart).toBe(6);
+  });
+
 });
