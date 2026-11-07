@@ -165,7 +165,7 @@ describe("Markdown and YAML folding", () => {
     ].join("\n");
     const ranges = findFoldRanges(source, "markdown");
     expect(ranges.filter(range => range.kind === "region").map(range => [range.startLine, range.endLine, range.label]))
-      .toEqual([[1, 8, "Guide"], [3, 6, "Install"], [5, 6, "Windows"]]);
+      .toEqual([[1, 8, "Guide"], [3, 6, "Install"], [5, 6, "Windows"], [7, 8, "Usage"]]);
   });
 
   it("folds fenced Markdown code blocks and ignores headings inside them", () => {
