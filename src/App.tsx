@@ -414,9 +414,9 @@ export default function App() {
     if(background){
       try{
         const pid=await invoke<number>("start_project_process",{directory:root,command:task.command});
-        setCommandOutput(old=>old+`\\n> ${task.command}\\n[התהליך הופעל בחלון מסוף נפרד · PID ${pid}]\\n`);
+        setCommandOutput(old=>old+"\n> "+task.command+"\n[התהליך הופעל בחלון מסוף נפרד · PID "+pid+"]\n");
         notify("הפרויקט הופעל בחלון מסוף נפרד");
-      }catch(error){setCommandOutput(old=>old+"שגיאה: "+String(error)+"\\n");notify("הפעלת הפרויקט נכשלה");}
+      }catch(error){setCommandOutput(old=>old+"שגיאה: "+String(error)+"\n");notify("הפעלת הפרויקט נכשלה");}
       return;
     }
     await runWorkspaceCommand(task.command);
@@ -566,7 +566,8 @@ export default function App() {
       else if(e.altKey&&(e.key==="ArrowUp"||e.key==="ArrowDown")&&e.target===editor.current){e.preventDefault();const selected=selections.current.get(activeId)??{start:editor.current?.selectionStart??0,end:editor.current?.selectionEnd??0};const result=moveLines(text,selected.start,selected.end,e.key==="ArrowUp"?-1:1);if(result.text!==text)edit(result.text,{start:result.selectionStart,end:result.selectionEnd});}
       else if(mod&&e.key==="/"&&e.target===editor.current){e.preventDefault();const marker:Record<string,string>={js:"//",jsx:"//",ts:"//",tsx:"//",py:"#",rs:"//",go:"//",java:"//",cs:"//",c:"//",cpp:"//",h:"//",hpp:"//",dart:"//",css:"//",sql:"--",sh:"#",bash:"#",ps1:"#",yaml:"#",yml:"#",toml:"#"};const selected=selections.current.get(activeId)??{start:editor.current?.selectionStart??0,end:editor.current?.selectionEnd??0};const token=marker[languageId(active?.path??null)];if(token){const result=toggleLineComment(text,selected.start,selected.end,token);edit(result.text,{start:result.selectionStart,end:result.selectionEnd});}}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="a"){e.preventDefault();setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);}
-      else if(mod&&e.key==="`"){e.preventDefault();setTerminalOpen(v=>!v);}\n      else if(e.key==="F5"){e.preventDefault();void runSelectedProjectTask();}
+      else if(mod&&e.key==="`"){e.preventDefault();setTerminalOpen(v=>!v);}
+      else if(e.key==="F5"){e.preventDefault();void runSelectedProjectTask();}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="p"){e.preventDefault();setPalette(true);window.setTimeout(()=>paletteInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="z"&&e.target===editor.current){e.preventDefault();if(e.shiftKey)redo();else undo();}
       else if(mod&&e.key.toLowerCase()==="y"&&e.target===editor.current){e.preventDefault();redo();}
