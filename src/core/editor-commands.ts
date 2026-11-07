@@ -81,7 +81,7 @@ export function duplicateLines(text: string, start: number, end: number): TextEd
   const lastLineEnd = lineEndAt(text, Math.max(start, end > start ? end - 1 : start));
   const to = lastLineEnd < text.length ? lastLineEnd + 1 : lastLineEnd;
   const block = text.slice(from, to);
-  const separator = block.endsWith("\\n") ? "" : "\\n";
+  const separator = block.endsWith("\n") ? "" : "\n";
   const insertion = separator + block;
   return {
     text: text.slice(0, to) + insertion + text.slice(to),
