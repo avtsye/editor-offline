@@ -42,7 +42,10 @@ describe("EditorEngine", () => {
     editor.setSelections([{ anchor: 0, head: 0 }, { anchor: 3, head: 3 }]);
     editor.insertText("_");
     expect(editor.getText()).toBe("_ab _cd");
+    expect(editor.getSelections()).toEqual([{ anchor: 1, head: 1 }, { anchor: 5, head: 5 }]);
     expect(editor.undo()).toBe("ab cd");
+    expect(editor.getSelections()).toEqual([{ anchor: 0, head: 0 }, { anchor: 3, head: 3 }]);
     expect(editor.redo()).toBe("_ab _cd");
+    expect(editor.getSelections()).toEqual([{ anchor: 1, head: 1 }, { anchor: 5, head: 5 }]);
   });
 });
