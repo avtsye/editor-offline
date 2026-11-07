@@ -64,6 +64,18 @@ describe("TextBuffer", () => {
     expect(buffer.offsetAt({ line: 3, column: 2 })).toBe(12);
   });
 
+  it("updates line positions incrementally after edits, undo and redo", () => {
+    const buffer = new TextBuffer("first\\nsecond\\nthird");
+    buffer.replaceRange(5, 6, "\\ninserted\\n");
+    expect(buffer.lineCount).toBe(5);
+    expect(buffer.getLine(3)).toBe("inserted");
+    expect(buffer.getLine(4)).toBe("second");
+    expect(buffer.undo()).toBe("first\\nsecond\\nthird");
+    expect(buffer.lineCount).toBe(3);
+    expect(buffer.redo()).toBe("first\\ninserted\\nsecond\\nthird");
+    expect(buffer.lineCount).toBe(5);
+  });
+
   it("handles CRLF line endings without including CR in line text", () => {
     const buffer = new TextBuffer("one\r\ntwo\r\n");
     expect(buffer.lineCount).toBe(3);
