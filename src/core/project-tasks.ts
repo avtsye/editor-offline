@@ -7,7 +7,7 @@ const PACKAGE_SCRIPT_PRIORITY = ["dev", "start", "serve", "watch", "test", "buil
 type VsCodeTask = { label?: string; command?: string; args?: string[]; type?: string };
 
 function quoteTaskArgument(value: string): string {
-  return /[\\s"]/u.test(value) ? '\"' + value.replace(/([\"\\\\])/g, '\\\\$1') + '\"' : value;
+  return /\\s|"/u.test(value) ? JSON.stringify(value) : value;
 }
 
 export function detectProjectTasks(files: string[], packageManifest?: string, vscodeTasks?: string): ProjectTask[] {
