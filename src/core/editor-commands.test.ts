@@ -32,6 +32,16 @@ describe("editor commands", () => {
     expect(result.selectionEnd).toBe(3);
   });
 
+  it("preserves an existing final newline when moving lines down", () => {
+    const result = moveLines("one\\ntwo\\nthree\\n", 4, 7, 1);
+    expect(result.text).toBe("one\\nthree\\ntwo\\n");
+  });
+
+  it("does not add a final newline when moving the last line upward", () => {
+    const result = moveLines("one\\ntwo\\nthree", 4, 7, 1);
+    expect(result.text.endsWith("\\n")).toBe(false);
+  });
+
   it("moves a selected line down and keeps its selection", () => {
     const result = moveLines("one\ntwo\nthree", 4, 7, 1);
     expect(result.text).toBe("one\nthree\ntwo");
