@@ -1,5 +1,6 @@
 use serde::Serialize;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize)]
 struct FileEntry {
@@ -45,6 +46,50 @@ fn create_directory(path: String) -> Result<(), String> {
     fs::create_dir_all(&path).map_err(|error| format!("{}: {}", path, error))
 }
 
+
+fn validate_child_name(name: &str) -> Result<(), String> {
+    if name.is_empty()
+        || name.trim() != name
+        || name == "."
+        || name == ".."
+        || name.chars().any(|character| {
+            character.is_control() || "<>:\"/\\\\|?*".contains(character)
+        })
+    {
+        return Err("שם לא תקין. יש להזין שם קובץ או תיקייה ללא נתיב או תווים אסורים.".into());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn create_file_in_directory(parent: String, name: String) -> Result<String, String> {
+    validate_child_name(&name)?;
+    let parent = PathBuf::from(parent);
+    if !parent.is_dir() {
+        return Err(format!("תיקיית היעד אינה קיימת: {}", parent.display()));
+    }
+    let path = parent.join(name);
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|error| format!("יצירת הקובץ נכשלה: {}: {}", path.display(), error))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn create_directory_in_directory(parent: String, name: String) -> Result<String, String> {
+    validate_child_name(&name)?;
+    let parent = PathBuf::from(parent);
+    if !parent.is_dir() {
+        return Err(format!("תיקיית היעד אינה קיימת: {}", parent.display()));
+    }
+    let path = parent.join(name);
+    fs::create_dir(&path)
+        .map_err(|error| format!("יצירת התיקייה נכשלה: {}: {}", path.display(), error))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 fn get_app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -59,8 +104,36 @@ pub fn run() {
             write_text_file,
             read_directory,
             create_directory,
+            create_file_in_directory,
+            create_directory_in_directory,
             get_app_version
         ])
         .run(tauri::generate_context!())
         .expect("error while running Editor Offline");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_child_name;
+
+    #[test]
+    fn accepts_simple_file_and_folder_names() {
+        assert!(validate_child_name("main.rs").is_ok());
+        assert!(validate_child_name("src").is_ok());
+        assert!(validate_child_name("קובץ חדש.txt").is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_or_traversal_names() {
+        for name in ["", ".", "..", "../escape", "nested/file", "nested\\\\file"] {
+            assert!(validate_child_name(name).is_err(), "accepted unsafe name: {name}");
+        }
+    }
+
+    #[test]
+    fn rejects_windows_reserved_path_characters() {
+        for name in ["bad:name", "bad|name", "bad?name", "bad*name", " trailing", "trailing "] {
+            assert!(validate_child_name(name).is_err(), "accepted invalid name: {name}");
+        }
+    }
 }
