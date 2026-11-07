@@ -125,3 +125,27 @@ describe("fold parser resilience", () => {
     ]);
   });
 });
+
+
+describe("explicit code regions", () => {
+  it("finds nested C-style and hash-style regions", () => {
+    const source = [
+      "// region outer",
+      "const first = 1;",
+      "// region inner",
+      "const second = 2;",
+      "// endregion",
+      "// endregion",
+    ].join("\n");
+    const ranges = findFoldRanges(source, "typescript");
+    expect(ranges.filter(range => range.kind === "region").map(range => [range.startLine, range.endLine, range.label]))
+      .toEqual([[1, 6, "outer"], [3, 5, "inner"]]);
+  });
+
+  it("supports Python region markers without confusing indentation blocks", () => {
+    const source = "# region setup\nvalue = 1\n# endregion\n";
+    expect(findFoldRanges(source, "python")).toContainEqual({
+      startLine: 1, endLine: 3, kind: "region", label: "setup",
+    });
+  });
+});
