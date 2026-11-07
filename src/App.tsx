@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, Bot, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, PanelRightClose, Play, Plus, RefreshCw, Replace, RotateCw, Save, Search, Send, Settings2, Terminal, Trash2, X } from "lucide-react";
+import { Activity, AlertCircle, Bot, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, PanelRightClose, Play, Plus, RefreshCw, Replace, RotateCw, Save, Search, Send, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
 import { tokenize } from "./core/tokenizer";
 import { findMatchingBrackets } from "./core/bracket-matching";
+import { findDelimiterDiagnostics } from "./core/syntax-diagnostics";
 import { sliceTokens } from "./core/token-slice";
 import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
 import { getVisibleLineRange } from "./core/viewport";
@@ -82,6 +83,7 @@ export default function App() {
   const [activeDirectory,setActiveDirectory] = useState<string|null>(null);
   const [contextMenu,setContextMenu] = useState<{entry:FileEntry;x:number;y:number}|null>(null);
   const [terminalOpen,setTerminalOpen] = useState(false);
+  const [problemsOpen,setProblemsOpen] = useState(false);
   const [commandInput,setCommandInput] = useState("");
   const [commandOutput,setCommandOutput] = useState("");
   const [commandRunning,setCommandRunning] = useState(false);
@@ -159,6 +161,10 @@ export default function App() {
   const matchingBracketOffsets=useMemo(
     ()=>new Set(matchingBracketPair??[]),
     [matchingBracketPair]
+  );
+  const diagnostics=useMemo(
+    ()=>findDelimiterDiagnostics(text,syntaxTokens,languageId(active?.path??null)),
+    [text,syntaxTokens,active?.path]
   );
   const renderedTokens=useMemo(()=>{
     let offset=visibleStartOffset;
@@ -723,7 +729,7 @@ export default function App() {
       <section className="editor">
         <div className="tabs">{tabs.map(t=><div key={t.id} className={"tab"+(t.id===activeId?" active":"")} onClick={()=>switchTab(t)}><FileCode2 size={14}/><span>{t.title}</span>{t.dirty&&<Circle size={8} fill="currentColor"/>}<button title="סגירה" onClick={e=>{e.stopPropagation();closeTab(t);}}><X size={13}/></button></div>)}
           <button className="side-toggle" title="הצגה/הסתרת סרגל" onClick={()=>setSidebar(v=>!v)}><PanelRightClose size={15}/></button>
-          <button className="side-toggle" title="לוח פקודות" onClick={()=>setPalette(true)}><Plus size={15}/></button><button className="side-toggle" title="מסוף פקודות" onClick={()=>setTerminalOpen(v=>!v)}><Terminal size={15}/></button>
+          <button className="side-toggle" title="לוח פקודות" onClick={()=>setPalette(true)}><Plus size={15}/></button><button className="side-toggle" title={"בעיות בקובץ · "+diagnostics.length} onClick={()=>setProblemsOpen(v=>!v)}><AlertCircle size={15}/>{diagnostics.length>0&&<small className="problem-count">{diagnostics.length}</small>}</button><button className="side-toggle" title="מסוף פקודות" onClick={()=>setTerminalOpen(v=>!v)}><Terminal size={15}/></button>
         </div>
         {findOpen&&<div className="findbar"><div><Search size={14}/><input ref={findInput} value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש"/></div>{replaceOpen&&<div><Replace size={14}/><input value={replacement} onChange={e=>setReplacement(e.target.value)} placeholder="החלפה"/></div>}<small>{matches} התאמות</small><button onClick={()=>findMatch(-1)}>הקודם</button><button onClick={()=>findMatch(1)}>הבא</button>{replaceOpen&&<><button onClick={replaceCurrent}>החלף</button><button onClick={replaceAll}>החלף הכול</button></>}<button title="סגירה" onClick={()=>setFindOpen(false)}><X size={14}/></button></div>}
         {active?.id==="welcome"?<div className="welcome"><div className="welcome-card"><div className="hero-icon"><Code2 size={34}/></div><small>OFFLINE-FIRST DEVELOPMENT</small><h1>בונים. מריצים. נשארים מקומיים.</h1><p>סביבת פיתוח עצמאית, מהירה ופתוחה — בלי חשבון, בלי ענן ובלי תלות בשירות חיצוני.</p><div className="welcome-buttons"><button className="primary" onClick={newFile}><FilePlus2 size={16}/>קובץ חדש</button><button onClick={()=>void openFile()}><File size={16}/>פתיחת קובץ</button><button onClick={()=>void openFolder()}><FolderOpen size={16}/>פתיחת תיקייה</button></div><div className="features"><div><Keyboard/><b>קיצורי מקלדת</b><span>Ctrl+N קובץ חדש · Ctrl+S שמירה</span></div><div><HardDrive/><b>מקומי כברירת מחדל</b><span>הקבצים נשארים במחשב שלך</span></div><div><Activity/><b>בפיתוח פעיל</b><span>מנוע עריכה ושירותי שפה בדרך</span></div></div></div></div>:
@@ -734,6 +740,19 @@ export default function App() {
             <textarea className="code-input" ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{const target=e.currentTarget;if(gutter.current)gutter.current.scrollTop=target.scrollTop;if(highlight.current){highlight.current.scrollTop=target.scrollTop;highlight.current.scrollLeft=target.scrollLeft;}setViewport({top:target.scrollTop,height:target.clientHeight||600});}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/>
           </div>
         </div></div>}
+        {problemsOpen&&<div className="problems-panel">
+          <div className="problems-header"><b><AlertCircle size={14}/> בעיות בקובץ ({diagnostics.length})</b><button title="סגירה" onClick={()=>setProblemsOpen(false)}><X size={14}/></button></div>
+          {diagnostics.length?diagnostics.map((item,index)=><button key={item.offset+":"+index} className="problem-row" onClick={()=>{
+            const selection={start:item.offset,end:item.offset};
+            selections.current.set(activeId,selection);
+            setCursorOffset(item.offset);
+            setCursor({line:item.line,column:item.column});
+            editor.current?.focus();
+            window.requestAnimationFrame(()=>editor.current?.setSelectionRange(item.offset,item.offset));
+          }}>
+            <AlertCircle size={13}/><span>{item.message}</span><small>{item.line}:{item.column}</small>
+          </button>):<div className="problems-empty"><Check size={14}/> לא נמצאו בעיות בסוגריים בקובץ</div>}
+        </div>}
         {terminalOpen&&<div className="command-panel">
           <div className="command-header"><b><Terminal size={14}/> מסוף פקודות</b><span>{rootName}</span>{detectedTasks.length>0&&<select aria-label="משימת פרויקט" className="task-select" value={selectedTaskId} onChange={event=>setSelectedTaskId(event.target.value)}>{detectedTasks.map(task=><option key={task.id} value={task.id}>{task.label}</option>)}</select>}<button title="ניקוי פלט" onClick={()=>setCommandOutput("")}><Trash2 size={13}/></button><button title="סגירה" onClick={()=>setTerminalOpen(false)}><X size={14}/></button></div>
           <pre className="command-output">{commandOutput||"הפקודות רצות מקומית בתיקיית העבודה. לדוגמה: npm test או cargo check"}</pre>
