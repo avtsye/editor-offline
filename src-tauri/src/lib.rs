@@ -52,9 +52,9 @@ fn validate_child_name(name: &str) -> Result<(), String> {
         || name.trim() != name
         || name == "."
         || name == ".."
-        || name.chars().any(|character| {
-            character.is_control() || "<>:\"/\\\\|?*".contains(character)
-        })
+        || name
+            .chars()
+            .any(|character| character.is_control() || "<>:\"/\\\\|?*".contains(character))
     {
         return Err("שם לא תקין. יש להזין שם קובץ או תיקייה ללא נתיב או תווים אסורים.".into());
     }
@@ -126,14 +126,27 @@ mod tests {
     #[test]
     fn rejects_empty_or_traversal_names() {
         for name in ["", ".", "..", "../escape", "nested/file", "nested\\\\file"] {
-            assert!(validate_child_name(name).is_err(), "accepted unsafe name: {name}");
+            assert!(
+                validate_child_name(name).is_err(),
+                "accepted unsafe name: {name}"
+            );
         }
     }
 
     #[test]
     fn rejects_windows_reserved_path_characters() {
-        for name in ["bad:name", "bad|name", "bad?name", "bad*name", " trailing", "trailing "] {
-            assert!(validate_child_name(name).is_err(), "accepted invalid name: {name}");
+        for name in [
+            "bad:name",
+            "bad|name",
+            "bad?name",
+            "bad*name",
+            " trailing",
+            "trailing ",
+        ] {
+            assert!(
+                validate_child_name(name).is_err(),
+                "accepted invalid name: {name}"
+            );
         }
     }
 }
