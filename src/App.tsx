@@ -133,7 +133,7 @@ export default function App() {
     const path=await open({directory:true,multiple:false});
     if(typeof path!=="string")return;
     setRoot(path);setActiveDirectory(path);setRootName(path.split(/[\\/]/).filter(Boolean).pop()||path);
-    setCache({});setExpanded(new Set([path]));await readDir(path);setSidebar(true);
+    setCache({});setExpanded(new Set([path]));setProjectSearchResults([]);setSidebarView("files");await readDir(path);setSidebar(true);
   };
   const createWorkspaceFile=async()=>{
     if(!desktop||!activeDirectory){notify("יש לפתוח תיקיית עבודה תחילה");return;}

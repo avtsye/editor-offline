@@ -436,4 +436,26 @@ mod tests {
         assert_eq!(results[0].line_number, 2);
         assert!(results[0].preview.contains("Value"));
     }
+
+    #[test]
+    fn project_search_walks_source_and_skips_dependency_directories() {
+        let root = temporary_directory();
+        let source = root.join("src");
+        let dependencies = root.join("node_modules");
+        std::fs::create_dir(&source).expect("source directory should be created");
+        std::fs::create_dir(&dependencies).expect("dependency directory should be created");
+        std::fs::write(source.join("main.rs"), "first line\\nneedle here\\nlast line")
+            .expect("source file should be written");
+        std::fs::write(dependencies.join("ignored.js"), "needle in dependency")
+            .expect("dependency file should be written");
+
+        let mut results = Vec::new();
+        let mut files_scanned = 0;
+        search_directory(&root, "needle", &mut results, &mut files_scanned, 0);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].line_number, 2);
+        assert!(results[0].path.ends_with("main.rs"));
+        std::fs::remove_dir_all(root).expect("temporary directory should be removed");
+    }
 }

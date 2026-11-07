@@ -76,7 +76,9 @@ The current editing surface is an intentionally small native textarea adapter ba
 | Ctrl+H | Find and replace |
 | F3 / Shift+F3 | Next / previous match |
 | Ctrl+G | Go to line |
+| Ctrl+Shift+F | Search the workspace |
 | Ctrl+Shift+P | Command palette |
+| Ctrl+` | Toggle command runner |
 | Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z | Undo / redo |
 
 ## Principles
