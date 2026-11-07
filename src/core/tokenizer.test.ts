@@ -76,10 +76,11 @@ describe("syntax delimiter diagnostics", () => {
     findDelimiterDiagnostics(source, tokenize(source, language), language);
 
   it("reports unmatched closing and unclosed opening delimiters with positions", () => {
-    const diagnostics = diagnose("run(]\\nnext({");
+    const diagnostics = diagnose("run(]\nnext{");
     expect(diagnostics.map(item => [item.offset, item.line, item.column])).toEqual([
+      [3, 1, 4],
       [4, 1, 5],
-      [10, 2, 6],
+      [10, 2, 5],
     ]);
     expect(diagnostics.map(item => item.severity)).toEqual(["error", "error"]);
   });
