@@ -453,8 +453,9 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_directory_in_directory, create_file_in_directory, delete_path, limit_command_output,
-        rename_path, validate_child_name, validate_local_chat_request, LocalChatMessage,
+        append_search_matches, create_directory_in_directory, create_file_in_directory, delete_path,
+        limit_command_output, rename_path, search_directory, validate_child_name,
+        validate_local_chat_request, LocalChatMessage,
     };
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
