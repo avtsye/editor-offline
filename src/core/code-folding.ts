@@ -92,6 +92,20 @@ export function findFoldRanges(source: string, languageId: string): FoldRange[] 
     }
   }
 
+  // Explicit region markers are supported across common editor conventions.
+  const regionStack: { line: number; label: string }[] = [];
+  const sourceLines = source.split("\n");
+  sourceLines.forEach((line, index) => {
+    const marker = line.match(/^\s*(?:\/\/\s*#?region\b(.*)|#\s*#?region\b(.*)|<!--\s*#?region\b(.*?)\s*-->)\s*$/i);
+    const endMarker = /^\s*(?:\/\/\s*#?endregion\b|#\s*#?endregion\b|<!--\s*#?endregion\b.*?-->)\s*$/i.test(line);
+    if (marker) {
+      regionStack.push({ line: index + 1, label: (marker[1] ?? marker[2] ?? marker[3] ?? "").trim() || "region" });
+    } else if (endMarker && regionStack.length) {
+      const opening = regionStack.pop()!;
+      if (index + 1 > opening.line) ranges.push({ startLine: opening.line, endLine: index + 1, kind: "region", label: opening.label });
+    }
+  });
+
   const unique = new Map<string, FoldRange>();
   for (const range of ranges) unique.set(`${range.startLine}:${range.endLine}:${range.kind}`, range);
   return [...unique.values()].sort((a, b) => a.startLine - b.startLine || b.endLine - a.endLine);
