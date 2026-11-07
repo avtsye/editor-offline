@@ -461,7 +461,7 @@ export default function App() {
     const tab:Tab={id:id(),path:null,title:"קובץ חדש",content:"",saved:"",dirty:false};
     buffers.current.set(tab.id,new TextBuffer(""));
     selections.current.set(tab.id,{start:0,end:0});
-    setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursor({line:1,column:1});
+    setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursorOffset(0);setCursor({line:1,column:1});
     window.setTimeout(()=>editor.current?.focus(),0);
   };
   const switchTab=(tab:Tab)=>{
@@ -469,6 +469,7 @@ export default function App() {
     const model=buffers.current.get(tab.id)??new TextBuffer(tab.content);
     buffers.current.set(tab.id,model);
     const selection=selections.current.get(tab.id)??{start:0,end:0};
+    setCursorOffset(selection.start);
     setCursor(model.positionAt(selection.start));
     window.requestAnimationFrame(()=>editor.current?.setSelectionRange(selection.start,selection.end));
   };
@@ -488,6 +489,7 @@ export default function App() {
       const model=buffers.current.get(next.id)??new TextBuffer(next.content);
       buffers.current.set(next.id,model);
       const selection=selections.current.get(next.id)??{start:0,end:0};
+      setCursorOffset(selection.start);
       setCursor(model.positionAt(selection.start));
       window.requestAnimationFrame(()=>editor.current?.setSelectionRange(selection.start,selection.end));
     }
@@ -499,7 +501,7 @@ export default function App() {
     setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));
     const selection=selections.current.get(activeId)??{start:0,end:0};
     const next={start:Math.min(selection.start,value.length),end:Math.min(selection.end,value.length)};
-    selections.current.set(activeId,next);setCursor(model.positionAt(next.start));
+    selections.current.set(activeId,next);setCursorOffset(next.start);setCursor(model.positionAt(next.start));
     window.requestAnimationFrame(()=>editor.current?.setSelectionRange(next.start,next.end));
   };
   const redo=()=>{
