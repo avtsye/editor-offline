@@ -67,7 +67,8 @@ async fn run_workspace_command(
         })
     });
 
-    task.await.map_err(|error| format!("משימת הפקודה נכשלה: {}", error))?
+    task.await
+        .map_err(|error| format!("משימת הפקודה נכשלה: {}", error))?
 }
 
 #[tauri::command]
