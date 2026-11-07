@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, GitBranch, HardDrive, Keyboard, PanelRightClose, Plus, Replace, RotateCw, Save, Search, Settings2, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, PanelRightClose, Plus, Replace, RotateCw, Save, Search, Settings2, X } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
@@ -21,6 +21,7 @@ export default function App() {
   const [tabs,setTabs] = useState<Tab[]>([{id:"welcome",path:null,title:"ברוכים הבאים",content:WELCOME,saved:WELCOME,dirty:false}]);
   const [activeId,setActiveId] = useState("welcome");
   const [root,setRoot] = useState<string|null>(null);
+  const [activeDirectory,setActiveDirectory] = useState<string|null>(null);
   const [rootName,setRootName] = useState("ללא תיקייה פתוחה");
   const [cache,setCache] = useState<Record<string,FileEntry[]>>({});
   const [expanded,setExpanded] = useState<Set<string>>(new Set());
@@ -99,8 +100,32 @@ export default function App() {
     if(!desktop){notify("פתיחת תיקיות זמינה ביישום Windows");return;}
     const path=await open({directory:true,multiple:false});
     if(typeof path!=="string")return;
-    setRoot(path);setRootName(path.split(/[\\/]/).filter(Boolean).pop()||path);
+    setRoot(path);setActiveDirectory(path);setRootName(path.split(/[\\/]/).filter(Boolean).pop()||path);
     setCache({});setExpanded(new Set([path]));await readDir(path);setSidebar(true);
+  };
+  const createWorkspaceFile=async()=>{
+    if(!desktop||!activeDirectory){notify("יש לפתוח תיקיית עבודה תחילה");return;}
+    const name=window.prompt("שם הקובץ החדש");
+    if(name===null||!name.trim())return;
+    try{
+      const path=await invoke<string>("create_file_in_directory",{parent:activeDirectory,name});
+      await readDir(activeDirectory);
+      await openPath(path);
+      notify("הקובץ נוצר");
+    }catch(error){notify("יצירת הקובץ נכשלה: "+String(error));}
+  };
+  const createWorkspaceFolder=async()=>{
+    if(!desktop||!activeDirectory){notify("יש לפתוח תיקיית עבודה תחילה");return;}
+    const name=window.prompt("שם התיקייה החדשה");
+    if(name===null||!name.trim())return;
+    try{
+      const path=await invoke<string>("create_directory_in_directory",{parent:activeDirectory,name});
+      await readDir(activeDirectory);
+      setExpanded(old=>new Set(old).add(path));
+      setCache(old=>({...old,[path]:[]}));
+      setActiveDirectory(path);
+      notify("התיקייה נוצרה");
+    }catch(error){notify("יצירת התיקייה נכשלה: "+String(error));}
   };
   const saveTab = async (tab:Tab) => {
     if(!desktop){notify("שמירה זמינה ביישום Windows");return;}
@@ -275,7 +300,7 @@ export default function App() {
     setExpanded(next);
   };
   const tree=(entries:FileEntry[],depth=0):ReactNode=>entries.map(entry=>entry.is_dir?
-    <div key={entry.path}><button className="tree-row" style={{paddingRight:12+depth*14}} onClick={()=>toggle(entry)}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
+    <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
     <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
   const commands=[["new","קובץ חדש","Ctrl+N"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
@@ -293,7 +318,7 @@ export default function App() {
       <nav className="activity"><button className="chosen" title="סייר קבצים" onClick={()=>setSidebar(true)}><Files/></button><button title="חיפוש" onClick={()=>{setSidebar(true);setFindOpen(true);}}><Search/></button><div/><button title="הגדלת גופן" onClick={()=>setFontSize(v=>Math.min(22,v+1))}><Settings2/></button><span>EO</span></nav>
       {sidebar&&<aside className="sidebar">
         <div className="side-title">סייר <button title="הסתרת סרגל" onClick={()=>setSidebar(false)}><PanelRightClose size={15}/></button></div>
-        <div className="section-title">{rootName}<button title="רענון" onClick={()=>root&&void readDir(root)}><RotateCw size={14}/></button></div>
+        <div className="section-title"><span title={activeDirectory??rootName}>{activeDirectory?.split(/[\\/]/).filter(Boolean).pop()??rootName}</span><div className="section-actions"><button title="קובץ חדש בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFile()}><FilePlus2 size={14}/></button><button title="תיקייה חדשה בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFolder()}><FolderPlus size={14}/></button><button title="רענון תיקייה" disabled={!activeDirectory} onClick={()=>activeDirectory&&void readDir(activeDirectory)}><RotateCw size={14}/></button></div></div>
         <div className="tree">{root?(cache[root]?tree(cache[root]):<p>טוען תיקייה…</p>):<div className="empty"><FolderOpen size={27}/><span>עדיין לא נפתחה תיקיית עבודה</span><button onClick={()=>void openFolder()}>פתיחת תיקייה</button></div>}</div>
         <div className="open-tabs"><div className="section-title">קבצים פתוחים <span>{tabs.length}</span></div>{tabs.map(t=><button key={t.id} className={t.id===activeId?"on":""} onClick={()=>switchTab(t)}><FileCode2 size={14}/>{t.title}{t.dirty&&<Circle size={7} fill="currentColor"/>}</button>)}</div>
       </aside>}
