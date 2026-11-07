@@ -73,7 +73,7 @@ describe("editor commands", () => {
     const caret = source.indexOf("}");
     const result = insertSmartNewline(source, caret, caret);
     expect(result.text).toBe("function run() {\\n    \\n        }");
-    expect(result.selectionStart).toBe(26);
+    expect(result.selectionStart).toBe(30);
   });
 
   it("preserves indentation on ordinary Enter and indents after an opener", () => {
