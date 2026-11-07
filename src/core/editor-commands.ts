@@ -100,3 +100,35 @@ export function deleteLines(text: string, start: number, end: number): TextEditR
   const caret = Math.min(removeFrom, nextText.length);
   return { text: nextText, selectionStart: caret, selectionEnd: caret };
 }
+
+
+export function insertSmartNewline(text: string, start: number, end: number, indentUnit = "    "): TextEditResult {
+  const from = Math.max(0, Math.min(start, text.length));
+  const to = Math.max(from, Math.min(end, text.length));
+  const lineStart = lineStartAt(text, from);
+  const before = text.slice(lineStart, from);
+  const after = text.slice(to);
+  const indent = before.match(/^[\\t ]*/)?.[0] ?? "";
+  const trimmedBefore = before.trimEnd();
+  const trimmedAfter = after.trimStart();
+  const opens = /[\\{\\[(]$/.test(trimmedBefore);
+  const closes = /^[\\}\\])]/.test(trimmedAfter);
+
+  if (opens && closes) {
+    const insertion = "\\n" + indent + indentUnit + "\\n" + indent;
+    const caret = from + 1 + indent.length + indentUnit.length;
+    return { text: text.slice(0, from) + insertion + text.slice(to), selectionStart: caret, selectionEnd: caret };
+  }
+
+  // When Enter is pressed immediately before a closing delimiter, keep that
+  // delimiter at the current indentation and place the caret one level inside.
+  if (!trimmedBefore && closes) {
+    const insertion = "\\n" + indent + indentUnit;
+    const caret = from + insertion.length;
+    return { text: text.slice(0, from) + insertion + text.slice(to), selectionStart: caret, selectionEnd: caret };
+  }
+
+  const insertion = "\\n" + indent + (opens ? indentUnit : "");
+  const caret = from + insertion.length;
+  return { text: text.slice(0, from) + insertion + text.slice(to), selectionStart: caret, selectionEnd: caret };
+}
