@@ -31,3 +31,37 @@ describe("code folding ranges", () => {
     expect(getFoldedLineSet(ranges, new Set([foldKey(ranges[0])]))).toEqual(new Set([2, 3, 4]));
   });
 });
+
+
+describe("FoldModel", () => {
+  it("projects folded blocks without changing source text or offsets", async () => {
+    const { FoldModel } = await import("./code-folding");
+    const source = "function run() {\\n  first();\\n  second();\\n}\\nafter();";
+    const model = new FoldModel(source, "javascript");
+    const range = model.getRanges()[0];
+    expect(model.toggle(range)).toBe(true);
+    expect(model.getProjection()).toEqual([
+      { line: 1, hiddenLineCount: 3, placeholder: "… 3 lines" },
+      { line: 5, hiddenLineCount: 0, placeholder: null },
+    ]);
+    expect(model.getVisibleLineCount()).toBe(2);
+    expect(model.sourceOffsetAtLine(5)).toBe(source.indexOf("after"));
+    expect(model.lineAtSourceOffset(source.indexOf("second"))).toBe(3);
+  });
+  it("reveals hidden lines on navigation", async () => {
+    const { FoldModel } = await import("./code-folding");
+    const model = new FoldModel("if (ok) {\\n  nested();\\n}\\nnext();", "javascript");
+    model.collapseAll();
+    expect(model.getVisibleLineCount()).toBe(2);
+    model.revealLine(2);
+    expect(model.getVisibleLineCount()).toBe(4);
+  });
+  it("supports collapse all and expand all", async () => {
+    const { FoldModel } = await import("./code-folding");
+    const model = new FoldModel("a {\\n b {\\n  c();\\n }\\n}", "javascript");
+    model.collapseAll();
+    expect(model.getVisibleLineCount()).toBe(1);
+    model.expandAll();
+    expect(model.getVisibleLineCount()).toBe(5);
+  });
+});

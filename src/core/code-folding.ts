@@ -105,3 +105,94 @@ export function getFoldedLineSet(ranges: FoldRange[], collapsed: Set<string>): S
 export function foldKey(range: Pick<FoldRange, "startLine" | "endLine">): string {
   return `${range.startLine}:${range.endLine}`;
 }
+
+
+export type FoldProjectionRow = {
+  line: number;
+  hiddenLineCount: number;
+  placeholder: string | null;
+};
+
+/** View-only folding state. The original source and offsets are never rewritten. */
+export class FoldModel {
+  private source = "";
+  private languageId = "plain";
+  private collapsed = new Set<number>();
+  private ranges: FoldRange[] = [];
+  private lineStarts: number[] = [0];
+
+  constructor(source = "", languageId = "plain") {
+    this.updateDocument(source, languageId);
+  }
+
+  updateDocument(source: string, languageId = this.languageId): void {
+    const previous = this.collapsed;
+    this.source = source;
+    this.languageId = languageId;
+    this.lineStarts = [0];
+    for (let index = 0; index < source.length; index += 1) {
+      if (source[index] === "\\n") this.lineStarts.push(index + 1);
+    }
+    this.ranges = findFoldRanges(source, languageId);
+    const valid = new Set(this.ranges.map(range => this.lineStarts[range.startLine - 1] ?? -1));
+    this.collapsed = new Set([...previous].filter(anchor => valid.has(anchor)));
+  }
+
+  getRanges(): FoldRange[] { return this.ranges.map(range => ({ ...range })); }
+  isCollapsed(range: FoldRange): boolean {
+    return this.collapsed.has(this.lineStarts[range.startLine - 1] ?? -1);
+  }
+  toggle(range: FoldRange): boolean {
+    const anchor = this.lineStarts[range.startLine - 1] ?? -1;
+    if (anchor < 0) return false;
+    if (this.collapsed.has(anchor)) this.collapsed.delete(anchor);
+    else this.collapsed.add(anchor);
+    return this.collapsed.has(anchor);
+  }
+  collapseAll(): void {
+    for (const range of this.ranges) this.collapsed.add(this.lineStarts[range.startLine - 1] ?? -1);
+  }
+  expandAll(): void { this.collapsed.clear(); }
+
+  getProjection(): FoldProjectionRow[] {
+    const byStart = new Map<number, FoldRange>();
+    for (const range of this.ranges) {
+      const anchor = this.lineStarts[range.startLine - 1] ?? -1;
+      if (anchor >= 0 && this.collapsed.has(anchor)) {
+        const existing = byStart.get(range.startLine);
+        if (!existing || range.endLine > existing.endLine) byStart.set(range.startLine, range);
+      }
+    }
+    const rows: FoldProjectionRow[] = [];
+    let line = 1;
+    while (line <= this.lineStarts.length) {
+      const range = byStart.get(line);
+      rows.push({ line, hiddenLineCount: range ? range.endLine - line : 0,
+        placeholder: range ? `… ${range.endLine - line} lines` : null });
+      line = range ? range.endLine + 1 : line + 1;
+    }
+    return rows;
+  }
+  getVisibleLineCount(): number { return this.getProjection().length; }
+  sourceOffsetAtLine(line: number): number {
+    const index = Math.max(0, Math.min(this.lineStarts.length - 1, Math.floor(line) - 1));
+    return this.lineStarts[index] ?? 0;
+  }
+  lineAtSourceOffset(offset: number): number {
+    const target = Math.max(0, Math.min(this.source.length, Math.floor(offset)));
+    let low = 0; let high = this.lineStarts.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (this.lineStarts[middle] <= target) low = middle + 1;
+      else high = middle;
+    }
+    return Math.max(1, low);
+  }
+  revealLine(line: number): void {
+    const target = Math.max(1, Math.floor(line));
+    for (const range of this.ranges) {
+      if (this.isCollapsed(range) && target > range.startLine && target <= range.endLine)
+        this.collapsed.delete(this.lineStarts[range.startLine - 1] ?? -1);
+    }
+  }
+}
