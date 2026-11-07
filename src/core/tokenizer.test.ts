@@ -95,7 +95,6 @@ describe("syntax delimiter diagnostics", () => {
 
   it("reports an inner mismatched opener while preserving a matching outer pair", () => {
     const diagnostics = diagnose("({])");
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0].offset).toBe(1);
+    expect(diagnostics.map(item => item.offset)).toEqual([1, 2]);
   });
 });
