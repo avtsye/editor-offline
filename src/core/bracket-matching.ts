@@ -45,5 +45,5 @@ export function findMatchingBrackets(
   const caret = Math.max(0, Math.floor(caretOffset));
   const sourceOffset = pairs.has(caret) ? caret : caret - 1;
   const partner = pairs.get(sourceOffset);
-  return partner === undefined ? null : [sourceOffset, partner];
+  return partner === undefined ? null : sourceOffset < partner ? [sourceOffset, partner] : [partner, sourceOffset];
 }
