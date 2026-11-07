@@ -28,7 +28,7 @@ Editor Offline is an original desktop application, not a distribution of VS Code
 5. **Local AI — OpenAI-compatible adapter implemented**
    - Read-only chat through configurable OpenAI Chat Completions and Anthropic Messages endpoints, with model discovery through /v1/models where available.
    - Presets for Ollama, LM Studio, llama.cpp server, LocalAI, Jan, vLLM, text-generation-webui, and KoboldCpp, plus custom loopback endpoints.
-   - The Rust backend rejects non-loopback hosts; provider, endpoint, and model preferences are stored locally; optional bearer tokens are passed only to the validated local endpoint and are not persisted.
+   - The Rust backend rejects non-loopback hosts; provider, endpoint, model, and protocol preferences are stored locally; optional API keys are passed only to the validated local endpoint using the protocol-specific header and are not persisted.
    - Optional active-file context is sent only to the selected local server.
    - The assistant cannot edit files or run commands; native adapters for proprietary protocols and approved diff application remain planned.
    - No cloud provider is required for normal operation.
@@ -50,3 +50,6 @@ Editor Offline is an original desktop application, not a distribution of VS Code
 - **1.0 Release:** installer/portable packaging, recovery, accessibility, performance and security audits.
 
 Milestones may be reordered when Windows integration or tests reveal a dependency.
+
+
+The editor sends inference requests only to loopback. A local runtime may still be configured to proxy requests to remote services, so strict offline use also depends on the selected model and runtime configuration.

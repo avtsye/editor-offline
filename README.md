@@ -102,4 +102,7 @@ MIT. See [LICENSE](LICENSE).
 
 The AI panel supports both OpenAI Chat Completions (/v1/chat/completions) and Anthropic Messages (/v1/messages), with model discovery through /v1/models where the local server exposes it. Presets are provided for Ollama, LM Studio, llama.cpp server, LocalAI, Jan, and vLLM; other local servers can be added with a custom base URL when they implement either protocol. Some servers expose only one protocol or do not expose model discovery; in that case, enter the model ID manually. Use a base URL such as http://127.0.0.1:1234/v1, not the full chat-completions URL.
 
-For privacy, the native backend accepts only localhost, 127.0.0.1, and ::1 hosts; LAN and public hosts are rejected. Provider, base URL, and model selection are saved locally; an optional bearer token is held in application memory for the current session and is not saved. Providers with proprietary APIs (for example, non-OpenAI-compatible endpoints) still need a dedicated adapter.
+For privacy, the native backend accepts only localhost, 127.0.0.1, and ::1 hosts; LAN and public hosts are rejected. Provider, base URL, model, and protocol selections are saved locally; an optional API key is held in application memory only and is never saved. Providers with proprietary APIs (for example, non-OpenAI-compatible endpoints) still need a dedicated adapter.
+
+
+The editor sends inference requests only to loopback addresses. A local model runtime may itself be configured to proxy requests to a remote service; choose a local model and verify the runtime's own routing settings when strict offline use is required.

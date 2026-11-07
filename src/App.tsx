@@ -13,7 +13,7 @@ type Tab = { id: string; path: string | null; title: string; content: string; sa
 type CommandResult = { stdout: string; stderr: string; exit_code: number | null; success: boolean };
 type ProjectSearchResult = { path: string; line_number: number; preview: string };
 type LocalChatMessage = { role: "user" | "assistant" | "system"; content: string };
-type LocalAiPreferences = { provider?: string; baseUrl?: string; model?: string };
+type LocalAiPreferences = { provider?: string; baseUrl?: string; model?: string; protocol?: string };
 const readLocalAiPreferences = (): LocalAiPreferences => {
   try {
     const raw = window.localStorage.getItem("editor-offline.local-ai");
@@ -23,6 +23,32 @@ const readLocalAiPreferences = (): LocalAiPreferences => {
   } catch {
     return {};
   }
+};
+const truncateUtf8 = (value: string, maxBytes: number) => {
+  const encoded = new TextEncoder().encode(value);
+  if (encoded.length <= maxBytes) return value;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  for (let end = maxBytes; end > Math.max(0, maxBytes - 4); end -= 1) {
+    try {
+      return decoder.decode(encoded.subarray(0, end));
+    } catch {
+      // Move back to the start of the incomplete UTF-8 character.
+    }
+  }
+  return "";
+};
+const fitLocalChatMessages = (messages: LocalChatMessage[], maxBytes: number, maxMessages = 30) => {
+  const selected: LocalChatMessage[] = [];
+  let usedBytes = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    const size = new TextEncoder().encode(message.content).length;
+    if (size > 40_000 || usedBytes + size > maxBytes) continue;
+    selected.unshift(message);
+    usedBytes += size;
+    if (selected.length >= maxMessages) break;
+  }
+  return selected;
 };
 const LOCAL_PROVIDERS = [
   { id: "ollama", label: "Ollama", baseUrl: "http://127.0.0.1:11434/v1" },
@@ -75,7 +101,9 @@ export default function App() {
     ()=>typeof savedLocalAiPreferences.baseUrl==="string"?savedLocalAiPreferences.baseUrl:"http://127.0.0.1:11434/v1"
   );
   const [localApiKey,setLocalApiKey] = useState("");
-  const [localProtocol,setLocalProtocol] = useState<"openai"|"anthropic">("openai");
+  const [localProtocol,setLocalProtocol] = useState<"openai"|"anthropic">(
+    ()=>savedLocalAiPreferences.protocol==="anthropic"?"anthropic":"openai"
+  );
   const [localModels,setLocalModels] = useState<string[]>([]);
   const [selectedLocalModel,setSelectedLocalModel] = useState(
     ()=>typeof savedLocalAiPreferences.model==="string"?savedLocalAiPreferences.model:""
@@ -125,11 +153,12 @@ export default function App() {
         provider:localProvider,
         baseUrl:localBaseUrl,
         model:selectedLocalModel,
+        protocol:localProtocol,
       }));
     }catch{
       // Preferences are optional; the editor remains usable if storage is unavailable.
     }
-  },[localProvider,localBaseUrl,selectedLocalModel]);
+  },[localProvider,localBaseUrl,selectedLocalModel,localProtocol]);
   const notify = (message:string) => { setToast(message); window.setTimeout(()=>setToast(""),2500); };
   const updateCursor = (offset:number) => setCursor(activeBuffer.positionAt(offset));
   const edit = (value:string, selection?:{start:number;end:number}) => {
@@ -295,17 +324,19 @@ export default function App() {
   const sendLocalChat=async()=>{
     const prompt=aiInput.trim();
     if(!prompt||aiBusy)return;
+    if(new TextEncoder().encode(prompt).length>40_000){notify("ההודעה ארוכה מדי לשרת המקומי (מעל 40 KB)");return;}
     if(!selectedLocalModel){notify("יש לבחור מודל מקומי תחילה");return;}
     const nextMessages:LocalChatMessage[]=[...aiMessages,{role:"user",content:prompt}];
     const requestMessages:LocalChatMessage[]=[];
     if(includeActiveFile&&active?.path){
-      const fileContext=text.slice(0,25_000);
+      const fileContext=truncateUtf8(text,24_000);
       requestMessages.push({
         role:"system",
-        content:"אתה עוזר תכנות מקומי. נתח את הקובץ המצורף, אך אל תניח שיש לך הרשאה לשנות קבצים או להריץ פקודות. קובץ: "+active.path+"\n\n"+fileContext+(text.length>25_000?"\n[הקובץ קוצר ל־25,000 תווים]":""),
+        content:"אתה עוזר תכנות מקומי. נתח את הקובץ המצורף, אך אל תניח שיש לך הרשאה לשנות קבצים או להריץ פקודות. קובץ: "+active.path+"\n\n"+fileContext+(fileContext!==text?"\n[הקובץ קוצר כדי לעמוד במגבלת ההקשר]":""),
       });
     }
-    requestMessages.push(...nextMessages);
+    const contextBudget=includeActiveFile&&active?.path?70_000:95_000;
+    requestMessages.push(...fitLocalChatMessages(nextMessages,contextBudget,30));
     setAiMessages(nextMessages);
     setAiInput("");
     setAiBusy(true);
@@ -576,7 +607,7 @@ export default function App() {
             <option value="anthropic">Anthropic Messages</option>
           </select>
           <input className="ai-endpoint-input" type="url" aria-label="כתובת API מקומית" value={localBaseUrl} onChange={event=>setLocalBaseUrl(event.target.value)} placeholder="http://127.0.0.1:1234/v1" disabled={aiBusy}/>
-          <input className="ai-key-input" type="password" aria-label="מפתח גישה אופציונלי" value={localApiKey} onChange={event=>setLocalApiKey(event.target.value)} placeholder="Bearer token (אופציונלי)" disabled={aiBusy} autoComplete="off"/>
+          <input className="ai-key-input" type="password" aria-label="מפתח גישה אופציונלי" value={localApiKey} onChange={event=>setLocalApiKey(event.target.value)} placeholder="מפתח API (אופציונלי)" disabled={aiBusy} autoComplete="off"/>
           <input className="ai-model-select" list="local-model-options" value={selectedLocalModel} onChange={event=>setSelectedLocalModel(event.target.value)} placeholder="שם מודל (או בחירה מהרשימה)" disabled={aiBusy}/>
           <datalist id="local-model-options">{localModels.map(model=><option key={model} value={model}/>)}</datalist>
           <label className="ai-context-toggle"><input type="checkbox" checked={includeActiveFile} onChange={event=>setIncludeActiveFile(event.target.checked)} disabled={!active?.path||aiBusy}/>כלול את הקובץ הפתוח בהקשר המקומי</label>
@@ -585,7 +616,7 @@ export default function App() {
             <textarea ref={aiInputRef} value={aiInput} onChange={event=>setAiInput(event.target.value)} placeholder="כתוב שאלה למודל המקומי…" disabled={!selectedLocalModel||aiBusy} rows={3}/>
             <div><button type="button" title="ניקוי השיחה" onClick={()=>setAiMessages([])} disabled={!aiMessages.length||aiBusy}><Trash2 size={13}/></button><span>{selectedLocalModel||"אין מודל נבחר"}</span><button type="submit" disabled={!selectedLocalModel||!aiInput.trim()||aiBusy}><Send size={14}/>{aiBusy?"ממתין…":"שלח"}</button></div>
           </form>
-          <p className="ai-footnote">תומך ב־OpenAI Chat Completions וב־Anthropic Messages בשרת מקומי. מפתח הגישה נשאר בזיכרון בלבד. העוזר אינו משנה קבצים ואינו מריץ פקודות.</p>
+          <p className="ai-footnote">היישום מתחבר ל־localhost בלבד. ודא שהשרת עצמו אינו מנתב בקשות לשירותי ענן. מפתח הגישה נשאר בזיכרון בלבד.</p>
         </div>}
       </aside>}
       <section className="editor">
