@@ -4,6 +4,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
 import { tokenize } from "./core/tokenizer";
+import { findMatchingBrackets } from "./core/bracket-matching";
 import { sliceTokens } from "./core/token-slice";
 import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
 import { getVisibleLineRange } from "./core/viewport";
@@ -123,6 +124,7 @@ export default function App() {
   const [toast,setToast] = useState("");
   const [fontSize,setFontSize] = useState(14);
   const [cursor,setCursor] = useState({line:1,column:1});
+  const [cursorOffset,setCursorOffset] = useState(0);
   const [busy,setBusy] = useState(false);
   const editor = useRef<HTMLTextAreaElement>(null);
   const gutter = useRef<HTMLDivElement>(null);
@@ -150,6 +152,22 @@ export default function App() {
     ()=>sliceTokens(syntaxTokens,visibleStartOffset,visibleEndOffset),
     [syntaxTokens,visibleStartOffset,visibleEndOffset]
   );
+  const matchingBracketPair=useMemo(
+    ()=>findMatchingBrackets(syntaxTokens,cursorOffset),
+    [syntaxTokens,cursorOffset]
+  );
+  const matchingBracketOffsets=useMemo(
+    ()=>new Set(matchingBracketPair??[]),
+    [matchingBracketPair]
+  );
+  const renderedTokens=useMemo(()=>{
+    let offset=visibleStartOffset;
+    return visibleTokens.map((token,index)=>{
+      const item={token,index,start:offset};
+      offset+=token.value.length;
+      return item;
+    });
+  },[visibleTokens,visibleStartOffset]);
   const matches = query ? text.split(query).length-1 : 0;
   useEffect(()=>{
     try{
@@ -164,12 +182,13 @@ export default function App() {
     }
   },[localProvider,localBaseUrl,selectedLocalModel,localProtocol]);
   const notify = (message:string) => { setToast(message); window.setTimeout(()=>setToast(""),2500); };
-  const updateCursor = (offset:number) => setCursor(activeBuffer.positionAt(offset));
+  const updateCursor = (offset:number) => { setCursorOffset(offset); setCursor(activeBuffer.positionAt(offset)); };
   const edit = (value:string, selection?:{start:number;end:number}) => {
     activeBuffer.replaceAll(value);
     setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));
     if (selection) {
       selections.current.set(activeId, selection);
+      setCursorOffset(selection.start);
       setCursor(activeBuffer.positionAt(selection.start));
       window.requestAnimationFrame(()=> {
         if (editor.current) {
@@ -189,6 +208,7 @@ export default function App() {
         const offset=targetLine?model.getLineStart(targetLine):(selections.current.get(old.id)??{start:0,end:0}).start;
         const selection={start:offset,end:offset};
         selections.current.set(old.id,selection);
+        setCursorOffset(offset);
         setCursor(model.positionAt(offset));
         window.requestAnimationFrame(()=>{editor.current?.focus();editor.current?.setSelectionRange(offset,offset);});
         return;
@@ -198,7 +218,7 @@ export default function App() {
       const offset=targetLine?model.getLineStart(targetLine):0;
       buffers.current.set(tab.id,model);
       selections.current.set(tab.id,{start:offset,end:offset});
-      setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursor(model.positionAt(offset));setFindOpen(false);
+      setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursorOffset(offset);setCursor(model.positionAt(offset));setFindOpen(false);
       if(targetLine)window.requestAnimationFrame(()=>{editor.current?.focus();editor.current?.setSelectionRange(offset,offset);});
     } catch(e){notify("פתיחת הקובץ נכשלה: "+String(e));}
   };
@@ -708,7 +728,7 @@ export default function App() {
         <div className="editor-body"><div className="crumb">{rootName}　›　{active?.title}</div><div className="codearea" style={{fontSize}}>
           <div className="gutter" ref={gutter} style={{paddingTop:visibleStart*lineHeight,paddingBottom:(lines.length-visibleEnd)*lineHeight}}>{lines.slice(visibleStart,visibleEnd).map((_,index)=><div key={visibleStart+index}>{visibleStart+index+1}</div>)}</div>
           <div className="code-input-wrap">
-            <pre ref={highlight} className="syntax-layer" aria-hidden="true" style={{paddingTop:visibleStart*lineHeight,paddingBottom:(lines.length-visibleEnd)*lineHeight}}>{visibleTokens.map((token,index)=><span key={index} className={"tok-"+token.kind}>{token.value}</span>)}</pre>
+            <pre ref={highlight} className="syntax-layer" aria-hidden="true" style={{paddingTop:visibleStart*lineHeight,paddingBottom:(lines.length-visibleEnd)*lineHeight}}>{renderedTokens.map(({token,index,start})=><span key={index} className={"tok-"+token.kind}>{token.value.split("").map((char,charIndex)=><span key={start+charIndex} className={matchingBracketOffsets.has(start+charIndex)?"bracket-match":undefined}>{char}</span>)}</span>)}</pre>
             <textarea className="code-input" ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{const target=e.currentTarget;if(gutter.current)gutter.current.scrollTop=target.scrollTop;if(highlight.current){highlight.current.scrollTop=target.scrollTop;highlight.current.scrollLeft=target.scrollLeft;}setViewport({top:target.scrollTop,height:target.clientHeight||600});}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/>
           </div>
         </div></div>}
