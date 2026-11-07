@@ -61,6 +61,31 @@ struct OpenAiChatResponseMessage {
     content: String,
 }
 
+#[derive(Debug, Serialize)]
+struct AnthropicChatRequest {
+    model: String,
+    max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+    messages: Vec<AnthropicChatMessage>,
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicChatMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicChatResponse {
+    content: Vec<AnthropicContentBlock>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicContentBlock {
+    text: Option<String>,
+}
+
 fn validate_local_api_base_url(base_url: &str) -> Result<reqwest::Url, String> {
     let trimmed = base_url.trim();
     if trimmed.is_empty() || trimmed.len() > 2_048 {
@@ -97,6 +122,25 @@ fn validate_local_api_key(api_key: &str) -> Result<(), String> {
         return Err("מפתח הגישה ארוך מדי.".into());
     }
     Ok(())
+}
+
+fn validate_local_api_protocol(protocol: &str) -> Result<(), String> {
+    if ["openai", "anthropic"].contains(&protocol) {
+        Ok(())
+    } else {
+        Err("פרוטוקול API מקומי לא נתמך.".into())
+    }
+}
+
+fn local_api_endpoint(base: &reqwest::Url, path: &str) -> Result<reqwest::Url, String> {
+    let base_path = base.path().trim_end_matches('/');
+    let relative = if base_path.ends_with("/v1") {
+        path.trim_start_matches('/').to_string()
+    } else {
+        format!("v1/{}", path.trim_start_matches('/'))
+    };
+    base.join(&relative)
+        .map_err(|error| format!("כתובת נקודת הקצה אינה תקינה: {}", error))
 }
 
 fn validate_local_chat_request(model: &str, messages: &[LocalChatMessage]) -> Result<(), String> {
@@ -415,10 +459,7 @@ async fn list_local_models(
         .timeout(Duration::from_secs(8))
         .build()
         .map_err(|error| format!("יצירת חיבור מקומי נכשלה: {}", error))?;
-    let mut request = client.get(
-        base.join("models")
-            .map_err(|error| format!("כתובת רשימת המודלים אינה תקינה: {}", error))?,
-    );
+    let mut request = client.get(local_api_endpoint(&base, "models")?);
     if !api_key.trim().is_empty() {
         request = request.bearer_auth(api_key.trim());
     }
@@ -451,50 +492,109 @@ async fn list_local_models(
 async fn chat_local_model(
     base_url: String,
     api_key: Option<String>,
+    protocol: String,
     model: String,
     messages: Vec<LocalChatMessage>,
 ) -> Result<String, String> {
     validate_local_chat_request(&model, &messages)?;
+    validate_local_api_protocol(&protocol)?;
     let base = validate_local_api_base_url(&base_url)?;
     let api_key = api_key.unwrap_or_default();
     validate_local_api_key(&api_key)?;
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(180))
         .build()
         .map_err(|error| format!("יצירת חיבור מקומי נכשלה: {}", error))?;
-    let request = OpenAiChatRequest {
-        model: &model,
-        messages: &messages,
-        stream: false,
+
+    if protocol == "openai" {
+        let request = OpenAiChatRequest {
+            model: &model,
+            messages: &messages,
+            stream: false,
+        };
+        let mut outgoing = client
+            .post(local_api_endpoint(&base, "chat/completions")?)
+            .json(&request);
+        if !api_key.trim().is_empty() {
+            outgoing = outgoing.bearer_auth(api_key.trim());
+        }
+        let response = outgoing.send().await.map_err(|_| {
+            "הבקשה לשרת המודל המקומי נכשלה. בדקו שהשרת פועל ושהכתובת נכונה.".to_string()
+        })?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            let detail = body.chars().take(240).collect::<String>();
+            return Err(format!("שרת המודל החזיר HTTP {}: {}", status, detail));
+        }
+        let response = response
+            .json::<OpenAiChatResponse>()
+            .await
+            .map_err(|error| {
+                format!("תשובת המודל אינה תואמת OpenAI Chat Completions: {}", error)
+            })?;
+        return response
+            .choices
+            .into_iter()
+            .next()
+            .map(|choice| choice.message.content)
+            .ok_or_else(|| "שרת המודל החזיר תשובה ללא בחירה (choices).".into());
+    }
+
+    let system = messages
+        .iter()
+        .filter(|message| message.role == "system")
+        .map(|message| message.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let conversation = messages
+        .iter()
+        .filter(|message| message.role != "system")
+        .map(|message| AnthropicChatMessage {
+            role: message.role.clone(),
+            content: message.content.clone(),
+        })
+        .collect::<Vec<_>>();
+    if conversation.is_empty() {
+        return Err("נדרשת לפחות הודעת משתמש אחת לשיחת Anthropic.".into());
+    }
+    let request = AnthropicChatRequest {
+        model,
+        max_tokens: 4_096,
+        system: if system.is_empty() { None } else { Some(system) },
+        messages: conversation,
     };
     let mut outgoing = client
-        .post(
-            base.join("chat/completions")
-                .map_err(|error| format!("כתובת הצ'אט אינה תקינה: {}", error))?,
-        )
+        .post(local_api_endpoint(&base, "messages")?)
+        .header("anthropic-version", "2023-06-01")
         .json(&request);
     if !api_key.trim().is_empty() {
-        outgoing = outgoing.bearer_auth(api_key.trim());
+        outgoing = outgoing.header("x-api-key", api_key.trim());
     }
     let response = outgoing.send().await.map_err(|_| {
-        "הבקשה לשרת המודל המקומי נכשלה. בדקו שהשרת פועל ושהכתובת נכונה.".to_string()
+        "הבקשה לשרת Anthropic המקומי נכשלה. בדקו שהשרת פועל ושהכתובת נכונה.".to_string()
     })?;
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         let detail = body.chars().take(240).collect::<String>();
-        return Err(format!("שרת המודל החזיר HTTP {}: {}", status, detail));
+        return Err(format!("שרת Anthropic החזיר HTTP {}: {}", status, detail));
     }
     let response = response
-        .json::<OpenAiChatResponse>()
+        .json::<AnthropicChatResponse>()
         .await
-        .map_err(|error| format!("תשובת המודל אינה תואמת OpenAI Chat Completions: {}", error))?;
-    response
-        .choices
+        .map_err(|error| format!("תשובת המודל אינה תואמת Anthropic Messages API: {}", error))?;
+    let answer = response
+        .content
         .into_iter()
-        .next()
-        .map(|choice| choice.message.content)
-        .ok_or_else(|| "שרת המודל החזיר תשובה ללא בחירה (choices).".into())
+        .filter_map(|block| block.text)
+        .collect::<Vec<_>>()
+        .join("\n");
+    if answer.is_empty() {
+        return Err("שרת Anthropic החזיר תשובה ללא תוכן טקסטואלי.".into());
+    }
+    Ok(answer)
 }
 
 #[tauri::command]
@@ -530,7 +630,8 @@ mod tests {
     use super::{
         append_search_matches, create_directory_in_directory, create_file_in_directory,
         delete_path, limit_command_output, rename_path, search_directory, validate_child_name,
-        validate_local_api_base_url, validate_local_chat_request, LocalChatMessage,
+        local_api_endpoint, validate_local_api_base_url, validate_local_api_protocol,
+        validate_local_chat_request, LocalChatMessage,
     };
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -659,6 +760,21 @@ mod tests {
         assert_eq!(results[0].line_number, 2);
         assert!(results[0].path.ends_with("main.rs"));
         std::fs::remove_dir_all(root).expect("temporary directory should be removed");
+    }
+
+    #[test]
+    fn local_api_endpoint_supports_root_and_v1_base_urls() {
+        let root = validate_local_api_base_url("http://127.0.0.1:1337").unwrap();
+        let versioned = validate_local_api_base_url("http://127.0.0.1:1337/v1").unwrap();
+        assert_eq!(local_api_endpoint(&root, "messages").unwrap().path(), "/v1/messages");
+        assert_eq!(local_api_endpoint(&versioned, "messages").unwrap().path(), "/v1/messages");
+    }
+
+    #[test]
+    fn local_api_rejects_unknown_protocols() {
+        assert!(validate_local_api_protocol("openai").is_ok());
+        assert!(validate_local_api_protocol("anthropic").is_ok());
+        assert!(validate_local_api_protocol("gemini").is_err());
     }
 
     #[test]
