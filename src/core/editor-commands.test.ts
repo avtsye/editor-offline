@@ -62,7 +62,7 @@ describe("editor commands", () => {
     expect(result.selectionEnd).toBe(13);
   });
   it("adds an indented line inside an empty brace pair", () => {
-    const result = insertSmartNewline("if (ready) {\n}", 12, 12);
+    const result = insertSmartNewline("if (ready) {}", 12, 12);
     expect(result.text).toBe("if (ready) {\n    \n}");
     expect(result.selectionStart).toBe(17);
     expect(result.selectionEnd).toBe(17);
