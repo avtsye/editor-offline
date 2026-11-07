@@ -20,6 +20,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Line/column mapping, CRLF handling, and incremental line indexing
 - [x] Indentation, paired brackets, find-next/previous, and replace operations
 - [x] In-house syntax tokenization and layered highlighting for common source formats
+- [x] Virtualized syntax and line-number viewport with overscan for long files
 - [x] Windows CI for TypeScript, frontend build, Rust checks, tests, and installer artifacts
 - [ ] Verify MSI/NSIS installers on a Windows machine
 - [ ] Replace the initial textarea input adapter with the custom virtualized editor surface

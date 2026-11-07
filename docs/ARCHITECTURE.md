@@ -18,7 +18,9 @@ Editor Offline is an original desktop application, not a distribution of VS Code
    - Maintains line-start indexes and maps UTF-16 offsets to line/column positions for the UI.
    - Applies range edits and incrementally updates line indexes rather than storing a full document snapshot per keystroke.
    - Remains separate from the React view.
-   - The current input adapter is a native textarea; the custom renderer, viewport virtualization, multi-cursor model, and syntax tokens remain planned work.
+   - The current input adapter is a native textarea layered under a project-owned syntax renderer.
+   - Syntax spans and line numbers are virtualized to a visible viewport with overscan; tokenization still scans the full document.
+   - A fully custom cursor/selection renderer, multi-cursor model, incremental tokenization, and large-file benchmarks remain planned work.
 4. **Language and tooling adapters — planned**
    - LSP for language intelligence.
    - DAP for debugging.

@@ -4,6 +4,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
 import { tokenize } from "./core/tokenizer";
+import { sliceTokens } from "./core/token-slice";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
@@ -28,6 +29,7 @@ export default function App() {
   const [commandInput,setCommandInput] = useState("");
   const [commandOutput,setCommandOutput] = useState("");
   const [commandRunning,setCommandRunning] = useState(false);
+  const [viewport,setViewport] = useState({top:0,height:600});
   const [rootName,setRootName] = useState("ללא תיקייה פתוחה");
   const [cache,setCache] = useState<Record<string,FileEntry[]>>({});
   const [expanded,setExpanded] = useState<Set<string>>(new Set());
@@ -56,6 +58,15 @@ export default function App() {
   if (!buffers.current.has(activeId)) buffers.current.set(activeId, activeBuffer);
   const lines = useMemo(()=>Array.from({length:activeBuffer.lineCount},(_,i)=>i+1),[text,activeBuffer.lineCount]);
   const syntaxTokens = useMemo(()=>tokenize(text,languageId(active?.path??null)),[text,active?.path]);
+  const lineHeight=fontSize*1.7;
+  const visibleStart=Math.min(Math.max(0,lines.length-1),Math.max(0,Math.floor(viewport.top/lineHeight)-8));
+  const visibleEnd=Math.min(lines.length,Math.max(visibleStart+1,Math.ceil((viewport.top+viewport.height)/lineHeight)+8));
+  const visibleStartOffset=activeBuffer.getLineStart(visibleStart+1);
+  const visibleEndOffset=visibleEnd<lines.length?activeBuffer.getLineStart(visibleEnd+1):text.length;
+  const visibleTokens=useMemo(
+    ()=>sliceTokens(syntaxTokens,visibleStartOffset,visibleEndOffset),
+    [syntaxTokens,visibleStartOffset,visibleEndOffset]
+  );
   const matches = query ? text.split(query).length-1 : 0;
   const notify = (message:string) => { setToast(message); window.setTimeout(()=>setToast(""),2500); };
   const updateCursor = (offset:number) => setCursor(activeBuffer.positionAt(offset));
@@ -330,6 +341,15 @@ export default function App() {
     if(cmd==="zoom+")setFontSize(v=>Math.min(22,v+1));if(cmd==="zoom-")setFontSize(v=>Math.max(11,v-1));
   };
   useEffect(()=>{
+    const syncViewport=()=>{
+      const input=editor.current;
+      if(input)setViewport({top:input.scrollTop,height:input.clientHeight||600});
+    };
+    syncViewport();
+    window.addEventListener("resize",syncViewport);
+    return()=>window.removeEventListener("resize",syncViewport);
+  },[activeId,fontSize,findOpen,terminalOpen,sidebar]);
+  useEffect(()=>{
     const key=(e:globalThis.KeyboardEvent)=>{
       const mod=e.ctrlKey||e.metaKey;
       if(mod&&e.key.toLowerCase()==="s"){e.preventDefault();void saveActive();}
@@ -418,10 +438,10 @@ export default function App() {
         {findOpen&&<div className="findbar"><div><Search size={14}/><input ref={findInput} value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש"/></div>{replaceOpen&&<div><Replace size={14}/><input value={replacement} onChange={e=>setReplacement(e.target.value)} placeholder="החלפה"/></div>}<small>{matches} התאמות</small><button onClick={()=>findMatch(-1)}>הקודם</button><button onClick={()=>findMatch(1)}>הבא</button>{replaceOpen&&<><button onClick={replaceCurrent}>החלף</button><button onClick={replaceAll}>החלף הכול</button></>}<button title="סגירה" onClick={()=>setFindOpen(false)}><X size={14}/></button></div>}
         {active?.id==="welcome"?<div className="welcome"><div className="welcome-card"><div className="hero-icon"><Code2 size={34}/></div><small>OFFLINE-FIRST DEVELOPMENT</small><h1>בונים. מריצים. נשארים מקומיים.</h1><p>סביבת פיתוח עצמאית, מהירה ופתוחה — בלי חשבון, בלי ענן ובלי תלות בשירות חיצוני.</p><div className="welcome-buttons"><button className="primary" onClick={newFile}><FilePlus2 size={16}/>קובץ חדש</button><button onClick={()=>void openFile()}><File size={16}/>פתיחת קובץ</button><button onClick={()=>void openFolder()}><FolderOpen size={16}/>פתיחת תיקייה</button></div><div className="features"><div><Keyboard/><b>קיצורי מקלדת</b><span>Ctrl+N קובץ חדש · Ctrl+S שמירה</span></div><div><HardDrive/><b>מקומי כברירת מחדל</b><span>הקבצים נשארים במחשב שלך</span></div><div><Activity/><b>בפיתוח פעיל</b><span>מנוע עריכה ושירותי שפה בדרך</span></div></div></div></div>:
         <div className="editor-body"><div className="crumb">{rootName}　›　{active?.title}</div><div className="codearea" style={{fontSize}}>
-          <div className="gutter" ref={gutter}>{lines.map(n=><div key={n}>{n}</div>)}</div>
+          <div className="gutter" ref={gutter} style={{paddingTop:visibleStart*lineHeight,paddingBottom:(lines.length-visibleEnd)*lineHeight}}>{lines.slice(visibleStart,visibleEnd).map((_,index)=><div key={visibleStart+index}>{visibleStart+index+1}</div>)}</div>
           <div className="code-input-wrap">
-            <pre ref={highlight} className="syntax-layer" aria-hidden="true">{syntaxTokens.map((token,index)=><span key={index} className={"tok-"+token.kind}>{token.value}</span>)}</pre>
-            <textarea className="code-input" ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{if(gutter.current)gutter.current.scrollTop=e.currentTarget.scrollTop;if(highlight.current){highlight.current.scrollTop=e.currentTarget.scrollTop;highlight.current.scrollLeft=e.currentTarget.scrollLeft;}}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/>
+            <pre ref={highlight} className="syntax-layer" aria-hidden="true" style={{paddingTop:visibleStart*lineHeight,paddingBottom:(lines.length-visibleEnd)*lineHeight}}>{visibleTokens.map((token,index)=><span key={index} className={"tok-"+token.kind}>{token.value}</span>)}</pre>
+            <textarea className="code-input" ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{const target=e.currentTarget;if(gutter.current)gutter.current.scrollTop=target.scrollTop;if(highlight.current){highlight.current.scrollTop=target.scrollTop;highlight.current.scrollLeft=target.scrollLeft;}setViewport({top:target.scrollTop,height:target.clientHeight||600});}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/>
           </div>
         </div></div>}
         {terminalOpen&&<div className="command-panel">
