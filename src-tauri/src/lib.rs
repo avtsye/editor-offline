@@ -162,10 +162,7 @@ fn rename_path(path: String, name: String) -> Result<String, String> {
         .ok_or_else(|| "לא ניתן לשנות את שם תיקיית הבסיס.".to_string())?;
     let destination = parent.join(name);
     if destination.exists() {
-        return Err(format!(
-            "כבר קיים פריט בשם: {}",
-            destination.display()
-        ));
+        return Err(format!("כבר קיים פריט בשם: {}", destination.display()));
     }
     fs::rename(&source, &destination).map_err(|error| format!("שינוי השם נכשל: {}", error))?;
     Ok(destination.to_string_lossy().to_string())
