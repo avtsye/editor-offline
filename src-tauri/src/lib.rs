@@ -32,7 +32,11 @@ fn read_directory(path: String) -> Result<Vec<FileEntry>, String> {
             is_dir: file_type.is_dir(),
         });
     }
-    result.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    result.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
     Ok(result)
 }
 
