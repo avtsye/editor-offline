@@ -14,6 +14,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Create files and folders directly in the selected workspace directory
 - [x] Rename workspace files and folders from the explorer context menu
 - [x] Delete files and empty folders with confirmation and unsaved-tab checks
+- [x] Local workspace command runner with bounded output and asynchronous execution
 - [x] Tabs, dirty-state indicators, keyboard shortcuts, find/replace
 - [x] Independent transactional text buffer with per-tab undo/redo and unit tests
 - [x] Line/column mapping, CRLF handling, and incremental line indexing
@@ -23,7 +24,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [ ] Verify MSI/NSIS installers on a Windows machine
 - [ ] Replace the initial textarea input adapter with the custom virtualized editor surface
 - [ ] Grammar-aware parsing, semantic highlighting, and language-aware editing
-- [ ] Integrated terminal and task runner
+- [ ] Interactive PTY terminal and configurable task runner
 - [ ] Local AI provider adapters
 
 ## Technology

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, PanelRightClose, Plus, Replace, RotateCw, Save, Search, Settings2, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, PanelRightClose, Play, Plus, Replace, RotateCw, Save, Search, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
@@ -7,6 +7,7 @@ import { tokenize } from "./core/tokenizer";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
+type CommandResult = { stdout: string; stderr: string; exit_code: number | null; success: boolean };
 const WELCOME = ["ברוכים הבאים ל־Editor Offline", "", "סביבת פיתוח עצמאית, מקומית וקלה.", "", "פתחו קובץ או תיקייה כדי להתחיל לעבוד.", "זהו שלב הבסיס של סביבת הפיתוח; מנוע העריכה ושירותי השפה מתפתחים בהדרגה."].join("\n");
 const FILTERS = [{ name: "קובצי קוד וטקסט", extensions: ["txt","md","js","jsx","ts","tsx","py","rs","json","html","css","toml","yaml","yml","xml","c","h","cpp","hpp","cs","java","dart","go","php","sql","sh","bat","ps1"] }, { name: "כל הקבצים", extensions: ["*"] }];
 const id = () => globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
@@ -23,6 +24,10 @@ export default function App() {
   const [root,setRoot] = useState<string|null>(null);
   const [activeDirectory,setActiveDirectory] = useState<string|null>(null);
   const [contextMenu,setContextMenu] = useState<{entry:FileEntry;x:number;y:number}|null>(null);
+  const [terminalOpen,setTerminalOpen] = useState(false);
+  const [commandInput,setCommandInput] = useState("");
+  const [commandOutput,setCommandOutput] = useState("");
+  const [commandRunning,setCommandRunning] = useState(false);
   const [rootName,setRootName] = useState("ללא תיקייה פתוחה");
   const [cache,setCache] = useState<Record<string,FileEntry[]>>({});
   const [expanded,setExpanded] = useState<Set<string>>(new Set());
@@ -190,6 +195,25 @@ export default function App() {
       notify("הפריט נמחק");
     }catch(error){notify("המחיקה נכשלה: "+String(error));}
   };
+
+  const runWorkspaceCommand=async()=>{
+    const command=commandInput.trim();
+    if(!command)return;
+    if(!desktop){notify("הרצת פקודות זמינה ביישום Windows");return;}
+    if(!root){notify("יש לפתוח תיקיית עבודה לפני הרצת פקודות");return;}
+    setCommandRunning(true);
+    setCommandOutput(old=>old+`\n> ${command}\n`);
+    setCommandInput("");
+    try{
+      const result=await invoke<CommandResult>("run_workspace_command",{directory:root,command});
+      const output=[result.stdout,result.stderr].filter(Boolean).join("\n");
+      setCommandOutput(old=>old+(output?output+"\n":"")+`[הסתיים: קוד יציאה ${result.exit_code??"לא ידוע"}]\n`);
+    }catch(error){
+      setCommandOutput(old=>old+"שגיאה: "+String(error)+"\n");
+    }finally{
+      setCommandRunning(false);
+    }
+  };
   const saveTab = async (tab:Tab) => {
     if(!desktop){notify("שמירה זמינה ביישום Windows");return;}
     let path=tab.path;
@@ -300,7 +324,7 @@ export default function App() {
   };
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
-    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
+    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
     if(cmd==="find"||cmd==="replace"){setFindOpen(true);setReplaceOpen(cmd==="replace");window.setTimeout(()=>findInput.current?.focus(),0);}
     if(cmd==="goto")goToLine();
     if(cmd==="zoom+")setFontSize(v=>Math.min(22,v+1));if(cmd==="zoom-")setFontSize(v=>Math.max(11,v-1));
@@ -315,6 +339,7 @@ export default function App() {
       else if(mod&&e.key.toLowerCase()==="f"){e.preventDefault();setFindOpen(true);setReplaceOpen(false);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="h"){e.preventDefault();setFindOpen(true);setReplaceOpen(true);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="g"){e.preventDefault();goToLine();}
+      else if(mod&&e.key==="`"){e.preventDefault();setTerminalOpen(v=>!v);}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="p"){e.preventDefault();setPalette(true);window.setTimeout(()=>paletteInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="z"&&e.target===editor.current){e.preventDefault();if(e.shiftKey)redo();else undo();}
       else if(mod&&e.key.toLowerCase()==="y"&&e.target===editor.current){e.preventDefault();redo();}
@@ -366,7 +391,7 @@ export default function App() {
     <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
     <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
-  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
+  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
   const filtered=commands.filter(c=>c[1].includes(paletteQuery));
 
   return <main className="app" dir="rtl">
@@ -388,7 +413,7 @@ export default function App() {
       <section className="editor">
         <div className="tabs">{tabs.map(t=><div key={t.id} className={"tab"+(t.id===activeId?" active":"")} onClick={()=>switchTab(t)}><FileCode2 size={14}/><span>{t.title}</span>{t.dirty&&<Circle size={8} fill="currentColor"/>}<button title="סגירה" onClick={e=>{e.stopPropagation();closeTab(t);}}><X size={13}/></button></div>)}
           <button className="side-toggle" title="הצגה/הסתרת סרגל" onClick={()=>setSidebar(v=>!v)}><PanelRightClose size={15}/></button>
-          <button className="side-toggle" title="לוח פקודות" onClick={()=>setPalette(true)}><Plus size={15}/></button>
+          <button className="side-toggle" title="לוח פקודות" onClick={()=>setPalette(true)}><Plus size={15}/></button><button className="side-toggle" title="מסוף פקודות" onClick={()=>setTerminalOpen(v=>!v)}><Terminal size={15}/></button>
         </div>
         {findOpen&&<div className="findbar"><div><Search size={14}/><input ref={findInput} value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש"/></div>{replaceOpen&&<div><Replace size={14}/><input value={replacement} onChange={e=>setReplacement(e.target.value)} placeholder="החלפה"/></div>}<small>{matches} התאמות</small><button onClick={()=>findMatch(-1)}>הקודם</button><button onClick={()=>findMatch(1)}>הבא</button>{replaceOpen&&<><button onClick={replaceCurrent}>החלף</button><button onClick={replaceAll}>החלף הכול</button></>}<button title="סגירה" onClick={()=>setFindOpen(false)}><X size={14}/></button></div>}
         {active?.id==="welcome"?<div className="welcome"><div className="welcome-card"><div className="hero-icon"><Code2 size={34}/></div><small>OFFLINE-FIRST DEVELOPMENT</small><h1>בונים. מריצים. נשארים מקומיים.</h1><p>סביבת פיתוח עצמאית, מהירה ופתוחה — בלי חשבון, בלי ענן ובלי תלות בשירות חיצוני.</p><div className="welcome-buttons"><button className="primary" onClick={newFile}><FilePlus2 size={16}/>קובץ חדש</button><button onClick={()=>void openFile()}><File size={16}/>פתיחת קובץ</button><button onClick={()=>void openFolder()}><FolderOpen size={16}/>פתיחת תיקייה</button></div><div className="features"><div><Keyboard/><b>קיצורי מקלדת</b><span>Ctrl+N קובץ חדש · Ctrl+S שמירה</span></div><div><HardDrive/><b>מקומי כברירת מחדל</b><span>הקבצים נשארים במחשב שלך</span></div><div><Activity/><b>בפיתוח פעיל</b><span>מנוע עריכה ושירותי שפה בדרך</span></div></div></div></div>:
@@ -399,6 +424,14 @@ export default function App() {
             <textarea className="code-input" ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{if(gutter.current)gutter.current.scrollTop=e.currentTarget.scrollTop;if(highlight.current){highlight.current.scrollTop=e.currentTarget.scrollTop;highlight.current.scrollLeft=e.currentTarget.scrollLeft;}}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/>
           </div>
         </div></div>}
+        {terminalOpen&&<div className="command-panel">
+          <div className="command-header"><b><Terminal size={14}/> מסוף פקודות</b><span>{rootName}</span><button title="ניקוי פלט" onClick={()=>setCommandOutput("")}><Trash2 size={13}/></button><button title="סגירה" onClick={()=>setTerminalOpen(false)}><X size={14}/></button></div>
+          <pre className="command-output">{commandOutput||"הפקודות רצות מקומית בתיקיית העבודה. לדוגמה: npm test או cargo check"}</pre>
+          <form className="command-input" onSubmit={event=>{event.preventDefault();void runWorkspaceCommand();}}>
+            <span>PS / CMD</span><input value={commandInput} onChange={event=>setCommandInput(event.target.value)} placeholder="הקלד פקודה להרצה…" disabled={commandRunning||!root}/>
+            <button type="submit" disabled={commandRunning||!root||!commandInput.trim()}><Play size={13}/>{commandRunning?"מריץ…":"הרץ"}</button>
+          </form>
+        </div>}
       </section>
     </section>
     <footer className="status"><div><span><GitBranch size={12}/> main</span><span><Circle size={7} fill="currentColor"/> מוכן</span></div><div><span>שורה {cursor.line}, עמודה {cursor.column}</span><span>UTF-8</span><span>{text.includes("\r\n")?"CRLF":"LF"}</span><span>{language(active?.path??null)}</span><span><HardDrive size={12}/> Offline</span></div></footer>

@@ -22,7 +22,7 @@ Editor Offline is an original desktop application, not a distribution of VS Code
 4. **Language and tooling adapters — planned**
    - LSP for language intelligence.
    - DAP for debugging.
-   - Local process/task adapters for build and test commands.
+   - A first local command runner executes user-entered shell commands in the workspace; interactive PTY sessions and configurable tasks remain planned.
 5. **Local AI — planned**
    - Provider interface for local runtimes such as Ollama and llama.cpp-compatible endpoints.
    - Explicit approval before applying edits or running commands.

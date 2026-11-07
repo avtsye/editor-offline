@@ -1,12 +1,73 @@
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
+use std::process::Command;
 
 #[derive(Debug, Serialize)]
 struct FileEntry {
     name: String,
     path: String,
     is_dir: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CommandOutput {
+    stdout: String,
+    stderr: String,
+    exit_code: Option<i32>,
+    success: bool,
+}
+
+fn limit_command_output(mut value: String) -> String {
+    const MAX_BYTES: usize = 128 * 1024;
+    if value.len() > MAX_BYTES {
+        let mut boundary = MAX_BYTES;
+        while !value.is_char_boundary(boundary) {
+            boundary -= 1;
+        }
+        value.truncate(boundary);
+        value.push_str("\n\n[הפלט נחתך לאחר 128 KB]");
+    }
+    value
+}
+
+#[tauri::command]
+async fn run_workspace_command(
+    directory: String,
+    command: String,
+) -> Result<CommandOutput, String> {
+    let command = command.trim().to_string();
+    if command.is_empty() {
+        return Err("יש להזין פקודה להרצה.".into());
+    }
+    let working_directory = PathBuf::from(directory);
+    if !working_directory.is_dir() {
+        return Err("תיקיית העבודה אינה קיימת.".into());
+    }
+
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(target_os = "windows")]
+        let output = Command::new("cmd.exe")
+            .args(["/C", command.as_str()])
+            .current_dir(&working_directory)
+            .output();
+
+        #[cfg(not(target_os = "windows"))]
+        let output = Command::new("sh")
+            .args(["-lc", command.as_str()])
+            .current_dir(&working_directory)
+            .output();
+
+        let output = output.map_err(|error| format!("הפעלת הפקודה נכשלה: {}", error))?;
+        Ok(CommandOutput {
+            stdout: limit_command_output(String::from_utf8_lossy(&output.stdout).into_owned()),
+            stderr: limit_command_output(String::from_utf8_lossy(&output.stderr).into_owned()),
+            exit_code: output.status.code(),
+            success: output.status.success(),
+        })
+    });
+
+    task.await.map_err(|error| format!("משימת הפקודה נכשלה: {}", error))?
 }
 
 #[tauri::command]
@@ -141,6 +202,7 @@ pub fn run() {
             create_directory_in_directory,
             rename_path,
             delete_path,
+            run_workspace_command,
             get_app_version
         ])
         .run(tauri::generate_context!())

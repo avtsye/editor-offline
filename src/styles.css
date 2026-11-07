@@ -21,3 +21,18 @@
 .context-menu button{width:100%;height:32px;padding:0 10px;border:0;border-radius:4px;color:#d5dbe7;background:transparent;text-align:right;font-size:11px}
 .context-menu button:hover{background:#333d4e}
 .context-menu button.danger{color:#efaaaa}
+
+/* Local workspace command runner */
+.command-panel{height:230px;flex:0 0 230px;display:flex;flex-direction:column;min-height:120px;border-top:1px solid #394253;background:#171a21;direction:rtl}
+.command-header{height:34px;flex:0 0 34px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid #2b313d;color:#bfc8d8;font-size:10px}
+.command-header b{display:flex;align-items:center;gap:7px;color:#dce4f2}
+.command-header span{flex:1;overflow:hidden;color:#78869b;text-overflow:ellipsis;white-space:nowrap}
+.command-header button{width:25px;height:24px;display:grid;place-items:center;border:0;border-radius:4px;color:#98a4b8;background:transparent}
+.command-header button:hover{background:#2b3240;color:#e1e8f4}
+.command-output{flex:1;min-height:0;overflow:auto;margin:0;padding:10px 13px;color:#c6d0df;background:#14171d;font:11px/1.65 Consolas,"Cascadia Code",monospace;white-space:pre-wrap;direction:ltr;text-align:left}
+.command-input{height:39px;flex:0 0 39px;display:flex;align-items:center;gap:9px;padding:4px 10px;border-top:1px solid #2b313d;background:#1d222b;direction:ltr}
+.command-input span{color:#86a0d1;font:10px Consolas,monospace;white-space:nowrap}
+.command-input input{flex:1;min-width:0;height:28px;padding:0 8px;border:1px solid #343d4d;border-radius:4px;outline:0;color:#e3eaf5;background:#151920;font:11px Consolas,monospace}
+.command-input input:focus{border-color:#607db4}
+.command-input button{height:28px;display:flex;align-items:center;gap:5px;padding:0 10px;border:1px solid #526d9d;border-radius:4px;color:#e5edfb;background:#334d78;font-size:10px}
+.command-input button:disabled{opacity:.4;cursor:default}
