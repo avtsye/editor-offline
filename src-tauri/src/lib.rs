@@ -209,7 +209,25 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_child_name;
+    use super::{
+        create_directory_in_directory, create_file_in_directory, delete_path,
+        limit_command_output, rename_path, validate_child_name,
+    };
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temporary_directory() -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be after Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "editor-offline-test-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&path).expect("temporary directory should be created");
+        path
+    }
 
     #[test]
     fn accepts_simple_file_and_folder_names() {
@@ -220,7 +238,7 @@ mod tests {
 
     #[test]
     fn rejects_empty_or_traversal_names() {
-        for name in ["", ".", "..", "../escape", "nested/file", "nested\\\\file"] {
+        for name in ["", ".", "..", "../escape", "nested/file", "nested\\file"] {
             assert!(
                 validate_child_name(name).is_err(),
                 "accepted unsafe name: {name}"
@@ -243,5 +261,48 @@ mod tests {
                 "accepted invalid name: {name}"
             );
         }
+    }
+
+    #[test]
+    fn workspace_files_can_be_created_renamed_and_deleted() {
+        let root = temporary_directory();
+        let root_string = root.to_string_lossy().into_owned();
+
+        let original = create_file_in_directory(root_string.clone(), "first.txt".into())
+            .expect("file should be created");
+        assert!(Path::new(&original).is_file());
+        assert!(create_file_in_directory(root_string.clone(), "first.txt".into()).is_err());
+
+        let renamed =
+            rename_path(original.clone(), "renamed.txt".into()).expect("file should be renamed");
+        assert!(!Path::new(&original).exists());
+        assert!(Path::new(&renamed).is_file());
+
+        delete_path(renamed.clone()).expect("file should be deleted");
+        assert!(!Path::new(&renamed).exists());
+        std::fs::remove_dir(&root).expect("temporary directory should be removed");
+    }
+
+    #[test]
+    fn non_empty_directories_cannot_be_deleted() {
+        let root = temporary_directory();
+        let root_string = root.to_string_lossy().into_owned();
+        let nested = create_directory_in_directory(root_string, "nested".into())
+            .expect("nested directory should be created");
+        let file = create_file_in_directory(nested.clone(), "keep.txt".into())
+            .expect("nested file should be created");
+
+        assert!(delete_path(nested.clone()).is_err());
+        assert!(Path::new(&file).exists());
+        delete_path(file).expect("nested file should be deleted");
+        delete_path(nested).expect("empty nested directory should be deleted");
+        std::fs::remove_dir(&root).expect("temporary directory should be removed");
+    }
+
+    #[test]
+    fn command_output_is_bounded_without_breaking_utf8() {
+        let output = limit_command_output("א".repeat(70_000));
+        assert!(output.contains("[הפלט נחתך לאחר 128 KB]"));
+        assert!(output.is_char_boundary(output.len()));
     }
 }
