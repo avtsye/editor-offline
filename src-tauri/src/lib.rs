@@ -298,6 +298,45 @@ fn limit_command_output(mut value: String) -> String {
 }
 
 #[tauri::command]
+async fn start_project_process(directory: String, command: String) -> Result<u32, String> {
+    let command = command.trim().to_string();
+    if command.is_empty() || command.len() > 8_192 {
+        return Err("פקודת ההרצה ריקה או ארוכה מדי.".into());
+    }
+    let working_directory = PathBuf::from(directory);
+    if !working_directory.is_dir() {
+        return Err("תיקיית העבודה אינה קיימת.".into());
+    }
+
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(target_os = "windows")]
+        let child = Command::new("cmd.exe")
+            .args(["/C", "start", "", "cmd.exe", "/K", command.as_str()])
+            .current_dir(&working_directory)
+            .spawn()
+            .map_err(|error| format!("פתיחת חלון ההרצה נכשלה: {}", error))?;
+
+        #[cfg(not(target_os = "windows"))]
+        let child = Command::new("x-terminal-emulator")
+            .args(["-e", "sh", "-lc", command.as_str()])
+            .current_dir(&working_directory)
+            .spawn()
+            .or_else(|_| {
+                Command::new("sh")
+                    .args(["-lc", command.as_str()])
+                    .current_dir(&working_directory)
+                    .spawn()
+            })
+            .map_err(|error| format!("הפעלת הפרויקט נכשלה: {}", error))?;
+
+        Ok(child.id())
+    });
+
+    task.await
+        .map_err(|error| format!("משימת ההרצה נכשלה: {}", error))?
+}
+
+#[tauri::command]
 async fn run_workspace_command(
     directory: String,
     command: String,
@@ -626,6 +665,7 @@ pub fn run() {
             rename_path,
             delete_path,
             run_workspace_command,
+            start_project_process,
             search_workspace,
             list_local_models,
             chat_local_model,
