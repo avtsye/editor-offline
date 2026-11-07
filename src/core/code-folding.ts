@@ -35,12 +35,14 @@ export function findFoldRanges(source: string, languageId: string): FoldRange[] 
     if ((language === "python" || language === "shell" || language === "yaml" || language === "yml") && char === "#") { lineComment = true; continue; }
     if (char === "/" && next === "/") { lineComment = true; index += 1; continue; }
     if (char === "/" && next === "*") { blockComment = true; index += 1; continue; }
-    if (char === "'" || char === '"') { quote = char; continue; }
+    if (char === "'" || char === '"' || char === "`") { quote = char; continue; }
     if (char === "{" || char === "[") stack.push({ char, offset: index });
     else if (char === "}" || char === "]") {
       const expected = char === "}" ? "{" : "[";
-      const opening = stack.pop();
+      const opening = stack[stack.length - 1];
+      // A mismatched closer must not discard an unrelated open block.
       if (opening?.char === expected) {
+        stack.pop();
         const startLine = lineAt(source, opening.offset);
         const endLine = lineAt(source, index);
         if (endLine > startLine) ranges.push({ startLine, endLine, kind: "block", label: char === "}" ? "}" : "]" });
@@ -117,7 +119,7 @@ export type FoldProjectionRow = {
 export class FoldModel {
   private source = "";
   private languageId = "plain";
-  private collapsed = new Set<number>();
+  private collapsed = new Set<string>();
   private ranges: FoldRange[] = [];
   private lineStarts: number[] = [0];
 
@@ -134,31 +136,30 @@ export class FoldModel {
       if (source[index] === "\n") this.lineStarts.push(index + 1);
     }
     this.ranges = findFoldRanges(source, languageId);
-    const valid = new Set(this.ranges.map(range => this.lineStarts[range.startLine - 1] ?? -1));
-    this.collapsed = new Set([...previous].filter(anchor => valid.has(anchor)));
+    const valid = new Set(this.ranges.map(foldKey));
+    this.collapsed = new Set([...previous].filter(key => valid.has(key)));
   }
 
   getRanges(): FoldRange[] { return this.ranges.map(range => ({ ...range })); }
   isCollapsed(range: FoldRange): boolean {
-    return this.collapsed.has(this.lineStarts[range.startLine - 1] ?? -1);
+    return this.collapsed.has(foldKey(range));
   }
   toggle(range: FoldRange): boolean {
-    const anchor = this.lineStarts[range.startLine - 1] ?? -1;
-    if (anchor < 0) return false;
-    if (this.collapsed.has(anchor)) this.collapsed.delete(anchor);
-    else this.collapsed.add(anchor);
-    return this.collapsed.has(anchor);
+    const key = foldKey(range);
+    if (!this.ranges.some(candidate => foldKey(candidate) === key)) return false;
+    if (this.collapsed.has(key)) this.collapsed.delete(key);
+    else this.collapsed.add(key);
+    return this.collapsed.has(key);
   }
   collapseAll(): void {
-    for (const range of this.ranges) this.collapsed.add(this.lineStarts[range.startLine - 1] ?? -1);
+    for (const range of this.ranges) this.collapsed.add(foldKey(range));
   }
   expandAll(): void { this.collapsed.clear(); }
 
   getProjection(): FoldProjectionRow[] {
     const byStart = new Map<number, FoldRange>();
     for (const range of this.ranges) {
-      const anchor = this.lineStarts[range.startLine - 1] ?? -1;
-      if (anchor >= 0 && this.collapsed.has(anchor)) {
+      if (this.collapsed.has(foldKey(range))) {
         const existing = byStart.get(range.startLine);
         if (!existing || range.endLine > existing.endLine) byStart.set(range.startLine, range);
       }
@@ -212,7 +213,7 @@ export class FoldModel {
     const target = Math.max(1, Math.floor(line));
     for (const range of this.ranges) {
       if (this.isCollapsed(range) && target > range.startLine && target <= range.endLine)
-        this.collapsed.delete(this.lineStarts[range.startLine - 1] ?? -1);
+        this.collapsed.delete(foldKey(range));
     }
   }
 }
