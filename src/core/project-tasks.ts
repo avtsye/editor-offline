@@ -4,7 +4,13 @@ type PackageManifest = { scripts?: Record<string, string>; packageManager?: stri
 
 const PACKAGE_SCRIPT_PRIORITY = ["dev", "start", "serve", "watch", "test", "build", "check", "lint"];
 
-export function detectProjectTasks(files: string[], packageManifest?: string): ProjectTask[] {
+type VsCodeTask = { label?: string; command?: string; args?: string[]; type?: string };
+
+function quoteTaskArgument(value: string): string {
+  return /[\\s\"]/u.test(value) ? '\"' + value.replace(/([\"\\\\])/g, '\\\\$1') + '\"' : value;
+}
+
+export function detectProjectTasks(files: string[], packageManifest?: string, vscodeTasks?: string): ProjectTask[] {
   const names = new Set(files.map(name => name.toLowerCase()));
   const tasks: ProjectTask[] = [];
   const add = (id: string, label: string, command: string) => {
@@ -36,6 +42,21 @@ export function detectProjectTasks(files: string[], packageManifest?: string): P
       }
     } catch {
       // An invalid package manifest must not prevent detection of other project types.
+    }
+  }
+
+  if (vscodeTasks) {
+    try {
+      const parsed = JSON.parse(vscodeTasks) as { tasks?: VsCodeTask[] };
+      for (const task of Array.isArray(parsed.tasks) ? parsed.tasks : []) {
+        if (typeof task.label !== "string" || !task.label.trim() || typeof task.command !== "string" || !task.command.trim()) continue;
+        if (task.type && task.type !== "shell" && task.type !== "process") continue;
+        const args = Array.isArray(task.args) ? task.args.filter((arg): arg is string => typeof arg === "string") : [];
+        const command = [task.command, ...args.map(quoteTaskArgument)].join(" ");
+        add("vscode:" + task.label, "VS Code · " + task.label, command);
+      }
+    } catch {
+      // Ignore malformed optional VS Code task files.
     }
   }
 
