@@ -53,7 +53,7 @@ fn validate_child_name(name: &str) -> Result<(), String> {
         || name == ".."
         || name
             .chars()
-            .any(|character| character.is_control() || "<>:\"/\\\\|?*".contains(character))
+            .any(|character| character.is_control() || "<>:\"/\\|?*".contains(character))
     {
         return Err("שם לא תקין. יש להזין שם קובץ או תיקייה ללא נתיב או תווים אסורים.".into());
     }
@@ -89,6 +89,39 @@ fn create_directory_in_directory(parent: String, name: String) -> Result<String,
     Ok(path.to_string_lossy().to_string())
 }
 
+
+#[tauri::command]
+fn rename_path(path: String, name: String) -> Result<String, String> {
+    validate_child_name(&name)?;
+    let source = PathBuf::from(path);
+    if !source.exists() {
+        return Err(format!("הנתיב אינו קיים: {}", source.display()));
+    }
+    let parent = source
+        .parent()
+        .ok_or_else(|| "לא ניתן לשנות את שם תיקיית הבסיס.".to_string())?;
+    let destination = parent.join(name);
+    if destination.exists() {
+        return Err(format!("כבר קיים פריט בשם: {}", destination.display()));
+    }
+    fs::rename(&source, &destination)
+        .map_err(|error| format!("שינוי השם נכשל: {}", error))?;
+    Ok(destination.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn delete_path(path: String) -> Result<(), String> {
+    let target = PathBuf::from(path);
+    let metadata = fs::symlink_metadata(&target)
+        .map_err(|error| format!("לא ניתן לקרוא את הפריט: {}", error))?;
+    if metadata.file_type().is_dir() {
+        fs::remove_dir(&target)
+            .map_err(|error| format!("מחיקת התיקייה נכשלה (אפשר למחוק רק תיקייה ריקה): {}", error))
+    } else {
+        fs::remove_file(&target).map_err(|error| format!("מחיקת הקובץ נכשלה: {}", error))
+    }
+}
+
 #[tauri::command]
 fn get_app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -105,6 +138,8 @@ pub fn run() {
             create_directory,
             create_file_in_directory,
             create_directory_in_directory,
+            rename_path,
+            delete_path,
             get_app_version
         ])
         .run(tauri::generate_context!())

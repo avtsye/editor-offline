@@ -22,6 +22,7 @@ export default function App() {
   const [activeId,setActiveId] = useState("welcome");
   const [root,setRoot] = useState<string|null>(null);
   const [activeDirectory,setActiveDirectory] = useState<string|null>(null);
+  const [contextMenu,setContextMenu] = useState<{entry:FileEntry;x:number;y:number}|null>(null);
   const [rootName,setRootName] = useState("ללא תיקייה פתוחה");
   const [cache,setCache] = useState<Record<string,FileEntry[]>>({});
   const [expanded,setExpanded] = useState<Set<string>>(new Set());
@@ -126,6 +127,68 @@ export default function App() {
       setActiveDirectory(path);
       notify("התיקייה נוצרה");
     }catch(error){notify("יצירת התיקייה נכשלה: "+String(error));}
+  };
+  const pathInside=(candidate:string,base:string)=>{
+    const separator=base.includes("\\\\")?"\\\\":"/";
+    return candidate===base||candidate.startsWith(base+separator);
+  };
+  const remapPath=(candidate:string,oldPath:string,newPath:string)=>
+    candidate===oldPath?newPath:pathInside(candidate,oldPath)?newPath+candidate.slice(oldPath.length):candidate;
+  const renameEntry=async(entry:FileEntry)=>{
+    const requested=window.prompt("שם חדש",entry.name);
+    if(requested===null||!requested.trim()||requested.trim()===entry.name)return;
+    try{
+      const nextPath=await invoke<string>("rename_path",{path:entry.path,name:requested.trim()});
+      setTabs(old=>old.map(tab=>tab.path&&pathInside(tab.path,entry.path)
+        ?{...tab,path:remapPath(tab.path,entry.path,nextPath),title:remapPath(tab.path,entry.path,nextPath).split(/[\\\\/]/).pop()||tab.title}
+        :tab));
+      setRoot(old=>old&&pathInside(old,entry.path)?remapPath(old,entry.path,nextPath):old);
+      setActiveDirectory(old=>old&&pathInside(old,entry.path)?remapPath(old,entry.path,nextPath):old);
+      setExpanded(old=>new Set([...old].map(path=>remapPath(path,entry.path,nextPath))));
+      setCache(old=>{
+        const next:Record<string,FileEntry[]>={};
+        for(const [directory,entries] of Object.entries(old)){
+          const mappedDirectory=remapPath(directory,entry.path,nextPath);
+          next[mappedDirectory]=entries.map(child=>({...child,path:remapPath(child.path,entry.path,nextPath)}));
+        }
+        return next;
+      });
+      const parent=entry.path.slice(0,Math.max(entry.path.lastIndexOf("/"),entry.path.lastIndexOf("\\\\")));
+      if(parent)await readDir(parent);
+      notify("השם עודכן");
+    }catch(error){notify("שינוי השם נכשל: "+String(error));}
+  };
+  const deleteEntry=async(entry:FileEntry)=>{
+    const openTabs=entry.is_dir?tabs.filter(tab=>tab.path&&pathInside(tab.path,entry.path)):[];
+    const fileTab=tabs.find(tab=>tab.path===entry.path);
+    const affected=entry.is_dir?openTabs:fileTab?[fileTab]:[];
+    if(affected.some(tab=>tab.dirty)&&!window.confirm("יש קבצים עם שינויים שלא נשמרו. למחוק בכל זאת?"))return;
+    if(entry.is_dir&&affected.length){notify("לא ניתן למחוק תיקייה שיש בה קבצים פתוחים");return;}
+    if(!window.confirm("למחוק את "+(entry.is_dir?"התיקייה ":"הקובץ ")+entry.name+"?"))return;
+    try{
+      await invoke("delete_path",{path:entry.path});
+      if(fileTab){
+        const rest=tabs.filter(tab=>tab.id!==fileTab.id);
+        buffers.current.delete(fileTab.id);selections.current.delete(fileTab.id);
+        if(!rest.length){
+          const welcome:Tab={id:"welcome",path:null,title:"ברוכים הבאים",content:WELCOME,saved:WELCOME,dirty:false};
+          buffers.current.set("welcome",new TextBuffer(WELCOME));setTabs([welcome]);setActiveId("welcome");
+        }else{
+          setTabs(rest);
+          if(activeId===fileTab.id){
+            const next=rest[rest.length-1];setActiveId(next.id);
+            const model=buffers.current.get(next.id)??new TextBuffer(next.content);
+            buffers.current.set(next.id,model);
+          }
+        }
+      }
+      const parent=entry.path.slice(0,Math.max(entry.path.lastIndexOf("/"),entry.path.lastIndexOf("\\\\")));
+      if(parent)await readDir(parent);
+      setCache(old=>Object.fromEntries(Object.entries(old).filter(([directory])=>!pathInside(directory,entry.path))));
+      setExpanded(old=>new Set([...old].filter(path=>!pathInside(path,entry.path))));
+      if(activeDirectory&&pathInside(activeDirectory,entry.path))setActiveDirectory(parent||root);
+      notify("הפריט נמחק");
+    }catch(error){notify("המחיקה נכשלה: "+String(error));}
   };
   const saveTab = async (tab:Tab) => {
     if(!desktop){notify("שמירה זמינה ביישום Windows");return;}
@@ -300,8 +363,8 @@ export default function App() {
     setExpanded(next);
   };
   const tree=(entries:FileEntry[],depth=0):ReactNode=>entries.map(entry=>entry.is_dir?
-    <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
-    <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
+    <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
+    <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
   const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
   const filtered=commands.filter(c=>c[1].includes(paletteQuery));
@@ -340,6 +403,13 @@ export default function App() {
     </section>
     <footer className="status"><div><span><GitBranch size={12}/> main</span><span><Circle size={7} fill="currentColor"/> מוכן</span></div><div><span>שורה {cursor.line}, עמודה {cursor.column}</span><span>UTF-8</span><span>{text.includes("\r\n")?"CRLF":"LF"}</span><span>{language(active?.path??null)}</span><span><HardDrive size={12}/> Offline</span></div></footer>
     {palette&&<div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setPalette(false);}}><div className="palette"><div className="palette-search"><Command size={17}/><input ref={paletteInput} value={paletteQuery} onChange={e=>setPaletteQuery(e.target.value)} placeholder="חפש פקודה…"/></div>{filtered.map(c=><button key={c[0]} onClick={()=>run(c[0])}><span>{c[1]}</span><kbd>{c[2]}</kbd></button>)}{!filtered.length&&<p>לא נמצאו פקודות</p>}<small>ESC לסגירה · פקודות זמינות בלבד</small></div></div>}
+    {contextMenu&&<div className="context-dismiss" onMouseDown={()=>setContextMenu(null)}>
+      <div className="context-menu" style={{left:Math.min(contextMenu.x,window.innerWidth-190),top:Math.min(contextMenu.y,window.innerHeight-105)}} onMouseDown={event=>event.stopPropagation()}>
+        <div className="context-heading">{contextMenu.entry.name}</div>
+        <button onClick={()=>{const entry=contextMenu.entry;setContextMenu(null);void renameEntry(entry);}}>שינוי שם</button>
+        <button className="danger" onClick={()=>{const entry=contextMenu.entry;setContextMenu(null);void deleteEntry(entry);}}>מחיקה</button>
+      </div>
+    </div>}
     {toast&&<div className="toast"><Check size={15}/>{toast}</div>}
   </main>;
 }

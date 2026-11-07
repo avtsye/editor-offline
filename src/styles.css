@@ -13,3 +13,11 @@
 .section-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto}
 .section-actions button:disabled{opacity:.3;cursor:default}
 .section-actions button:disabled:hover{color:#aeb6c6;background:transparent}
+
+/* Explorer context menu */
+.context-dismiss{position:fixed;inset:0;z-index:25}
+.context-menu{position:fixed;z-index:26;width:180px;padding:5px;border:1px solid #3b4558;border-radius:7px;background:#242a35;box-shadow:0 12px 32px #0008}
+.context-heading{padding:7px 9px;overflow:hidden;color:#8995a9;font-size:10px;text-overflow:ellipsis;white-space:nowrap;direction:ltr;text-align:right}
+.context-menu button{width:100%;height:32px;padding:0 10px;border:0;border-radius:4px;color:#d5dbe7;background:transparent;text-align:right;font-size:11px}
+.context-menu button:hover{background:#333d4e}
+.context-menu button.danger{color:#efaaaa}

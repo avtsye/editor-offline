@@ -12,6 +12,8 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Hebrew-first workbench with an LTR code-editing surface
 - [x] Open files and folders, browse a workspace, edit and save text files
 - [x] Create files and folders directly in the selected workspace directory
+- [x] Rename workspace files and folders from the explorer context menu
+- [x] Delete files and empty folders with confirmation and unsaved-tab checks
 - [x] Tabs, dirty-state indicators, keyboard shortcuts, find/replace
 - [x] Independent transactional text buffer with per-tab undo/redo and unit tests
 - [x] Line/column mapping, CRLF handling, and incremental line indexing
