@@ -25,6 +25,19 @@ describe("editor commands", () => {
     expect(toggleLineComment("one\n\ntwo", 0, 7, "#").text).toBe("# one\n\n# two");
   });
 
+  it("duplicates the current line or selected lines", () => {
+    expect(duplicateLines("one\\ntwo\\nthree", 4, 7).text).toBe("one\\ntwo\\ntwo\\nthree");
+    expect(duplicateLines("one\\ntwo\\n", 0, 3).text).toBe("one\\none\\ntwo\\n");
+  });
+
+  it("deletes selected lines and leaves a valid caret", () => {
+    const result = deleteLines("one\\ntwo\\nthree", 4, 7);
+    expect(result.text).toBe("one\\nthree");
+    expect(result.selectionStart).toBe(4);
+    expect(deleteLines("one\\ntwo", 0, 3).text).toBe("two");
+    expect(deleteLines("one\\ntwo", 4, 7).text).toBe("one");
+  });
+
   it("moves a selected line up and keeps its selection", () => {
     const result = moveLines("one\ntwo\nthree", 4, 7, -1);
     expect(result.text).toBe("two\none\nthree");
