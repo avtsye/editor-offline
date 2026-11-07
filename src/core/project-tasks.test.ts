@@ -11,6 +11,14 @@ describe("project task detection", () => {
     expect(tasks[0].command).toBe("npm run dev");
   });
 
+  it("uses the package manager declared by the project", () => {
+    const pnpm = detectProjectTasks(["package.json", "pnpm-lock.yaml"], JSON.stringify({ packageManager: "pnpm@9.0.0", scripts: { dev: "vite" } }));
+    const yarn = detectProjectTasks(["package.json", "yarn.lock"], JSON.stringify({ scripts: { start: "node ." } }));
+    const bun = detectProjectTasks(["package.json", "bun.lock"], JSON.stringify({ scripts: { test: "vitest" } }));
+    expect(pnpm[0].command).toBe("pnpm dev");
+    expect(yarn[0].command).toBe("yarn start");
+    expect(bun[0].command).toBe("bun run test");
+  });
   it("detects Rust run, test and check tasks", () => {
     expect(detectProjectTasks(["Cargo.toml"]).map(task => task.id)).toEqual(["cargo:run", "cargo:test", "cargo:check"]);
   });
