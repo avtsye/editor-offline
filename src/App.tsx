@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, Minus, PanelRightClose, Plus, Replace, RotateCw, Save, Search, Settings2, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, GitBranch, HardDrive, Keyboard, PanelRightClose, Replace, RotateCw, Save, Search, Settings2, X } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
@@ -163,7 +163,7 @@ export default function App() {
         <div className="open-tabs"><div className="section-title">קבצים פתוחים <span>{tabs.length}</span></div>{tabs.map(t=><button key={t.id} className={t.id===activeId?"on":""} onClick={()=>switchTab(t)}><FileCode2 size={14}/>{t.title}{t.dirty&&<Circle size={7} fill="currentColor"/>}</button>)}</div>
       </aside>}
       <section className="editor">
-        <div className="tabs">{tabs.map(t=><div key={t.id} className={"tab"+(t.id===activeId?" active":"")} onClick={()=>switchTab(t)}><FileCode2 size={14}/><span>{t.title}</span>{t.dirty?<Circle size={8} fill="currentColor"/>:<button title="סגירה" onClick={e=>{e.stopPropagation();closeTab(t);}}><X size={13}/></button>}</div>)}
+        <div className="tabs">{tabs.map(t=><div key={t.id} className={"tab"+(t.id===activeId?" active":"")} onClick={()=>switchTab(t)}><FileCode2 size={14}/><span>{t.title}</span>{t.dirty&&<Circle size={8} fill="currentColor"/>}<button title="סגירה" onClick={e=>{e.stopPropagation();closeTab(t);}}><X size={13}/></button></div>)}
           <button className="side-toggle" title="הצגה/הסתרת סרגל" onClick={()=>setSidebar(v=>!v)}><PanelRightClose size={15}/></button>
           <button className="side-toggle" title="לוח פקודות" onClick={()=>setPalette(true)}><Plus size={15}/></button>
         </div>
