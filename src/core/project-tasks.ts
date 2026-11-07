@@ -1,6 +1,6 @@
 export type ProjectTask = { id: string; label: string; command: string };
 
-type PackageManifest = { scripts?: Record<string, string> };
+type PackageManifest = { scripts?: Record<string, string>; packageManager?: string };
 
 const PACKAGE_SCRIPT_PRIORITY = ["dev", "start", "serve", "watch", "test", "build", "check", "lint"];
 
@@ -15,13 +15,24 @@ export function detectProjectTasks(files: string[], packageManifest?: string): P
     try {
       const manifest = JSON.parse(packageManifest) as PackageManifest;
       const scripts = manifest.scripts && typeof manifest.scripts === "object" ? manifest.scripts : {};
+      const declaredManager = manifest.packageManager?.split("@")[0];
+      const manager = ["pnpm", "yarn", "bun", "npm"].includes(declaredManager ?? "")
+        ? declaredManager!
+        : names.has("pnpm-lock.yaml") ? "pnpm"
+        : names.has("yarn.lock") ? "yarn"
+        : names.has("bun.lock") || names.has("bun.lockb") ? "bun"
+        : "npm";
       const ordered = [
         ...PACKAGE_SCRIPT_PRIORITY.filter(name => scripts[name]),
         ...Object.keys(scripts).filter(name => !PACKAGE_SCRIPT_PRIORITY.includes(name)).sort(),
       ];
       for (const name of ordered) {
         if (typeof scripts[name] !== "string" || !scripts[name].trim()) continue;
-        add("npm:" + name, "npm · " + name, "npm run " + name);
+        const command = manager === "npm" ? "npm run " + name
+          : manager === "yarn" ? "yarn " + name
+          : manager === "bun" ? "bun run " + name
+          : "pnpm " + name;
+        add(manager + ":" + name, manager + " · " + name, command);
       }
     } catch {
       // An invalid package manifest must not prevent detection of other project types.
