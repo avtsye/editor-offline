@@ -65,11 +65,18 @@ export default function App() {
     try {
       const content = await invoke<string>("read_text_file",{path});
       const old = tabs.find(t=>t.path===path);
-      if(old){setActiveId(old.id);return;}
+      if(old){
+        setActiveId(old.id);
+        const model=buffers.current.get(old.id)??new TextBuffer(old.content);
+        buffers.current.set(old.id,model);
+        const selection=selections.current.get(old.id)??{start:0,end:0};
+        setCursor(model.positionAt(selection.start));
+        return;
+      }
       const tab:Tab={id:id(),path,title:path.split(/[\\/]/).pop()||"קובץ",content,saved:content,dirty:false};
       buffers.current.set(tab.id,new TextBuffer(content));
       selections.current.set(tab.id,{start:0,end:0});
-      setTabs(old=>[...old,tab]);setActiveId(tab.id);setFindOpen(false);
+      setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursor({line:1,column:1});setFindOpen(false);
     } catch(e){notify("פתיחת הקובץ נכשלה: "+String(e));}
   };
   const openFile = async () => {
@@ -109,7 +116,7 @@ export default function App() {
     const tab:Tab={id:id(),path:null,title:"קובץ חדש",content:"",saved:"",dirty:false};
     buffers.current.set(tab.id,new TextBuffer(""));
     selections.current.set(tab.id,{start:0,end:0});
-    setTabs(old=>[...old,tab]);setActiveId(tab.id);
+    setTabs(old=>[...old,tab]);setActiveId(tab.id);setCursor({line:1,column:1});
     window.setTimeout(()=>editor.current?.focus(),0);
   };
   const switchTab=(tab:Tab)=>{
@@ -133,7 +140,10 @@ export default function App() {
     setTabs(rest);
     if(activeId===tab.id){
       const next=rest[rest.length-1];setActiveId(next.id);
+      const model=buffers.current.get(next.id)??new TextBuffer(next.content);
+      buffers.current.set(next.id,model);
       const selection=selections.current.get(next.id)??{start:0,end:0};
+      setCursor(model.positionAt(selection.start));
       window.requestAnimationFrame(()=>editor.current?.setSelectionRange(selection.start,selection.end));
     }
   };
@@ -158,25 +168,33 @@ export default function App() {
     window.requestAnimationFrame(()=>editor.current?.setSelectionRange(next.start,next.end));
   };
   const findMatch=(direction:1|-1)=>{
-    if(!query||!editor.current)return;
-    const current=direction>0?editor.current.selectionEnd:editor.current.selectionStart;
+    const input=editor.current;
+    if(!query||!input)return;
+    const current=direction>0?input.selectionEnd:input.selectionStart;
     let index=direction>0?text.indexOf(query,current):text.lastIndexOf(query,Math.max(0,current-query.length-1));
     if(index<0)index=direction>0?text.indexOf(query):text.lastIndexOf(query);
     if(index<0){notify("לא נמצאו התאמות");return;}
-    editor.current.focus();
-    editor.current.setSelectionRange(index,index+query.length);
+    input.focus();
+    input.setSelectionRange(index,index+query.length);
     selections.current.set(activeId,{start:index,end:index+query.length});
     updateCursor(index);
   };
   const replaceCurrent=()=>{
-    if(!query||!editor.current)return;
-    const start=editor.current.selectionStart;
-    const end=editor.current.selectionEnd;
+    const input=editor.current;
+    if(!query||!input)return;
+    const start=input.selectionStart;
+    const end=input.selectionEnd;
     if(text.slice(start,end)!==query){findMatch(1);return;}
     const caret=start+replacement.length;
     edit(text.slice(0,start)+replacement+text.slice(end),{start:caret,end:caret});
   };
-  const replaceAll=()=>{if(!query)return;const value=text.split(query).join(replacement);edit(value);notify("ההחלפה הושלמה");};
+  const replaceAll=()=>{
+    if(!query)return;
+    const caret=editor.current?.selectionStart??0;
+    const value=text.split(query).join(replacement);
+    edit(value,{start:Math.min(caret,value.length),end:Math.min(caret,value.length)});
+    notify("ההחלפה הושלמה");
+  };
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
     if(cmd==="new")newFile(); if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
