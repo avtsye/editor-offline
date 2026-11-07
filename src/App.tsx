@@ -248,7 +248,7 @@ export default function App() {
       const fileContext=text.slice(0,25_000);
       requestMessages.push({
         role:"system",
-        content:`אתה עוזר תכנות מקומי. נתח את הקובץ המצורף, אך אל תניח שיש לך הרשאה לשנות קבצים או להריץ פקודות. קובץ: ${active.path}\\n\\n${fileContext}${text.length>25_000?"\\n[הקובץ קוצר ל־25,000 תווים]":""}`,
+        content:`אתה עוזר תכנות מקומי. נתח את הקובץ המצורף, אך אל תניח שיש לך הרשאה לשנות קבצים או להריץ פקודות. קובץ: ${active.path}\n\n${fileContext}${text.length>25_000?"\n[הקובץ קוצר ל־25,000 תווים]":""}`,
       });
     }
     requestMessages.push(...nextMessages);
