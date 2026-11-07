@@ -212,12 +212,14 @@ export default function App() {
     }
     if(e.key==="Enter"){
       e.preventDefault();
-      const lineStart=text.lastIndexOf("\n",Math.max(0,start-1))+1;
+      const lineStart=start===0?0:text.lastIndexOf("\n",start-1)+1;
       const beforeCursor=text.slice(lineStart,start);
       const indent=beforeCursor.match(/^[\t ]*/)?.[0]??"";
-      const extra=/[{\[(][\t ]*$/.test(beforeCursor)?"    ":"";
-      const insertion="\n"+indent+extra;
-      const caret=start+insertion.length;
+      const opensEmptyBlock=beforeCursor.trimEnd().endsWith("{")&&text.slice(end).startsWith("}");
+      const insertion=opensEmptyBlock
+        ? "\n"+indent+"    "+"\n"+indent
+        : "\n"+indent+(/[{\[(][\t ]*$/.test(beforeCursor)?"    ":"");
+      const caret=opensEmptyBlock?start+1+indent.length+4:start+insertion.length;
       edit(text.slice(0,start)+insertion+text.slice(end),{start:caret,end:caret});
       return;
     }
