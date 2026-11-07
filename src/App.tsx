@@ -199,10 +199,22 @@ export default function App() {
     edit(value,{start:Math.min(caret,value.length),end:Math.min(caret,value.length)});
     notify("ההחלפה הושלמה");
   };
+  const goToLine=()=>{
+    const requested=window.prompt("מעבר למספר שורה",String(cursor.line));
+    if(requested===null)return;
+    const line=Number(requested);
+    if(!Number.isInteger(line)||line<1){notify("יש להזין מספר שורה חיובי");return;}
+    const offset=activeBuffer.getLineStart(line);
+    editor.current?.focus();
+    editor.current?.setSelectionRange(offset,offset);
+    selections.current.set(activeId,{start:offset,end:offset});
+    updateCursor(offset);
+  };
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
     if(cmd==="new")newFile(); if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
     if(cmd==="find"||cmd==="replace"){setFindOpen(true);setReplaceOpen(cmd==="replace");window.setTimeout(()=>findInput.current?.focus(),0);}
+    if(cmd==="goto")goToLine();
     if(cmd==="zoom+")setFontSize(v=>Math.min(22,v+1));if(cmd==="zoom-")setFontSize(v=>Math.max(11,v-1));
   };
   useEffect(()=>{
@@ -214,6 +226,7 @@ export default function App() {
       else if(mod&&e.key.toLowerCase()==="o"){e.preventDefault();void openFile();}
       else if(mod&&e.key.toLowerCase()==="f"){e.preventDefault();setFindOpen(true);setReplaceOpen(false);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="h"){e.preventDefault();setFindOpen(true);setReplaceOpen(true);window.setTimeout(()=>findInput.current?.focus(),0);}
+      else if(mod&&e.key.toLowerCase()==="g"){e.preventDefault();goToLine();}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="p"){e.preventDefault();setPalette(true);window.setTimeout(()=>paletteInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="z"&&e.target===editor.current){e.preventDefault();if(e.shiftKey)redo();else undo();}
       else if(mod&&e.key.toLowerCase()==="y"&&e.target===editor.current){e.preventDefault();redo();}
@@ -265,7 +278,7 @@ export default function App() {
     <div key={entry.path}><button className="tree-row" style={{paddingRight:12+depth*14}} onClick={()=>toggle(entry)}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
     <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
-  const commands=[["new","קובץ חדש","Ctrl+N"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
+  const commands=[["new","קובץ חדש","Ctrl+N"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
   const filtered=commands.filter(c=>c[1].includes(paletteQuery));
 
   return <main className="app" dir="rtl">
