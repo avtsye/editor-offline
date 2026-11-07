@@ -12,8 +12,8 @@ const ordered = (selection: EditorSelection) => ({
 export class EditorEngine {
   readonly buffer: TextBuffer;
   private selections: EditorSelection[] = [{ anchor: 0, head: 0 }];
-  private undoBatches: number[] = [];
-  private redoBatches: number[] = [];
+  private undoBatches: { count: number; before: EditorSelection[]; after: EditorSelection[] }[] = [];
+  private redoBatches: { count: number; before: EditorSelection[]; after: EditorSelection[] }[] = [];
 
   constructor(value = "") {
     this.buffer = new TextBuffer(value);
@@ -89,6 +89,7 @@ export class EditorEngine {
   }
 
   applyEdits(edits: EditorEdit[]): string {
+    const beforeSelections = this.getSelections();
     const ascending = [...edits]
       .map(edit => ({ from: clamp(edit.from, this.buffer.length), to: clamp(edit.to, this.buffer.length), insert: edit.insert }))
       .map(edit => ({ ...edit, from: Math.min(edit.from, edit.to), to: Math.max(edit.from, edit.to) }))
@@ -105,10 +106,6 @@ export class EditorEngine {
       this.buffer.replaceRange(edit.from, edit.to, edit.insert);
       applied += 1;
     }
-    if (applied > 0) {
-      this.undoBatches.push(applied);
-      this.redoBatches = [];
-    }
     let shift = 0;
     const nextSelections = accepted.map(edit => {
       const caret = edit.from + shift + edit.insert.length;
@@ -116,6 +113,10 @@ export class EditorEngine {
       return { anchor: caret, head: caret };
     });
     this.setSelections(nextSelections);
+    if (applied > 0) {
+      this.undoBatches.push({ count: applied, before: beforeSelections, after: this.getSelections() });
+      this.redoBatches = [];
+    }
     return this.getText();
   }
 
@@ -138,9 +139,7 @@ export class EditorEngine {
     const primary = ordered(this.selections[this.selections.length - 1]);
     if (primary.from === primary.to) return false;
     const needle = text.slice(primary.from, primary.to);
-    const start = this.selections.some(selection => ordered(selection).from !== primary.from)
-      ? primary.to
-      : primary.to;
+    const start = Math.max(...this.selections.map(selection => ordered(selection).to));
     const found = text.indexOf(needle, start);
     if (found < 0) return false;
     this.addSelection(found, found + needle.length);
@@ -152,22 +151,28 @@ export class EditorEngine {
   }
 
   undo(): string {
-    const count = this.undoBatches.pop();
-    if (!count) return this.getText();
+    const batch = this.undoBatches.pop();
+    if (!batch) return this.getText();
     let result = this.getText();
-    for (let index = 0; index < count; index += 1) result = this.buffer.undo();
-    this.redoBatches.push(count);
-    this.setPrimarySelection(Math.min(this.selections[0]?.head ?? 0, result.length));
+    for (let index = 0; index < batch.count; index += 1) result = this.buffer.undo();
+    this.redoBatches.push(batch);
+    this.setSelections(batch.before.map(selection => ({
+      anchor: Math.min(selection.anchor, result.length),
+      head: Math.min(selection.head, result.length),
+    })));
     return result;
   }
 
   redo(): string {
-    const count = this.redoBatches.pop();
-    if (!count) return this.getText();
+    const batch = this.redoBatches.pop();
+    if (!batch) return this.getText();
     let result = this.getText();
-    for (let index = 0; index < count; index += 1) result = this.buffer.redo();
-    this.undoBatches.push(count);
-    this.setPrimarySelection(Math.min(this.selections[0]?.head ?? 0, result.length));
+    for (let index = 0; index < batch.count; index += 1) result = this.buffer.redo();
+    this.undoBatches.push(batch);
+    this.setSelections(batch.after.map(selection => ({
+      anchor: Math.min(selection.anchor, result.length),
+      head: Math.min(selection.head, result.length),
+    })));
     return result;
   }
 }
