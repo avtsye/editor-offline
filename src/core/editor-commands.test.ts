@@ -24,18 +24,18 @@ describe("editor commands", () => {
   it("does not add comment markers to blank lines", () => {
     expect(toggleLineComment("one\n\ntwo", 0, 7, "#").text).toBe("# one\n\n# two");
   });
+
   it("moves a selected line up and keeps its selection", () => {
-    const result = moveLines("one\\ntwo\\nthree", 4, 7, -1);
-    expect(result.text).toBe("two\\none\\nthree");
+    const result = moveLines("one\ntwo\nthree", 4, 7, -1);
+    expect(result.text).toBe("two\none\nthree");
     expect(result.selectionStart).toBe(0);
     expect(result.selectionEnd).toBe(3);
   });
 
   it("moves a selected line down and keeps its selection", () => {
-    const result = moveLines("one\\ntwo\\nthree", 4, 7, 1);
-    expect(result.text).toBe("one\\nthree\\ntwo");
+    const result = moveLines("one\ntwo\nthree", 4, 7, 1);
+    expect(result.text).toBe("one\nthree\ntwo");
     expect(result.selectionStart).toBe(9);
     expect(result.selectionEnd).toBe(12);
   });
-
 });
