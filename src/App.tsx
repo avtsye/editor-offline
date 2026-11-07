@@ -511,7 +511,7 @@ export default function App() {
     setTabs(old=>old.map(t=>t.id===activeId?{...t,content:value,dirty:value!==t.saved}:t));
     const selection=selections.current.get(activeId)??{start:0,end:0};
     const next={start:Math.min(selection.start,value.length),end:Math.min(selection.end,value.length)};
-    selections.current.set(activeId,next);setCursor(model.positionAt(next.start));
+    selections.current.set(activeId,next);setCursorOffset(next.start);setCursor(model.positionAt(next.start));
     window.requestAnimationFrame(()=>editor.current?.setSelectionRange(next.start,next.end));
   };
   const findMatch=(direction:1|-1)=>{
