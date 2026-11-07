@@ -551,7 +551,7 @@ export default function App() {
       const lineStart=start===0?0:text.lastIndexOf("\n",start-1)+1;
       const indentation=text.slice(lineStart,start);
       if(/^[\t ]+$/.test(indentation)){
-        const remove=indentation.endsWith("\t")?1:Math.min(4,indentation.length-(indentation.length%4||0));
+        const remove=indentation.endsWith("\t")?1:Math.min(4,indentation.length%4||4);
         if(remove>0){
           e.preventDefault();
           const caret=start-remove;
