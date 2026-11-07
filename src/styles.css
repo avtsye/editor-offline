@@ -51,3 +51,31 @@
 .project-results b{max-width:100%;overflow:hidden;color:#dce6f8;font-size:10px;text-overflow:ellipsis;white-space:nowrap;direction:ltr;align-self:stretch;text-align:left}
 .project-results small{display:-webkit-box;overflow:hidden;color:#aeb8c8;font:10px/1.5 Consolas,monospace;text-align:left;direction:ltr;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .project-results em{width:100%;overflow:hidden;color:#75839a;font-size:9px;font-style:normal;text-overflow:ellipsis;white-space:nowrap;direction:ltr;text-align:left}
+
+/* Local Ollama assistant */
+.local-ai{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:9px}
+.ai-toolbar{display:flex;align-items:center;gap:8px}
+.ai-toolbar>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ai-toolbar b{color:#d9e2f2;font-size:11px}
+.ai-toolbar small{overflow:hidden;color:#8290a5;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
+.ai-toolbar button{width:29px;height:28px;display:grid;place-items:center;border:1px solid #3b465a;border-radius:5px;color:#aebbd0;background:#242b37}
+.ai-model-select{height:31px;width:100%;padding:0 8px;border:1px solid #394354;border-radius:5px;color:#dce5f3;background:#1b2029;font-size:10px}
+.ai-context-toggle{display:flex;align-items:center;gap:6px;color:#9ca9bb;font-size:9px}
+.ai-context-toggle input{accent-color:#7395dd}
+.ai-messages{flex:1;min-height:100px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px 1px}
+.ai-message{padding:8px;border:1px solid #303949;border-radius:6px;background:#202631}
+.ai-message.user{border-color:#3d5275;background:#222d40}
+.ai-message small{color:#8fa8d7;font-size:9px}
+.ai-message p{margin:5px 0 0;color:#d0d8e5;font-size:10px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+.ai-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:15px;color:#8492a8;text-align:center}
+.ai-empty svg{color:#8da9df}
+.ai-empty b{color:#c8d3e5;font-size:11px}
+.ai-empty span{font-size:9px;line-height:1.7}
+.ai-compose{display:flex;flex-direction:column;gap:6px}
+.ai-compose textarea{width:100%;min-height:62px;max-height:130px;resize:vertical;padding:8px;border:1px solid #3a4558;border-radius:5px;outline:0;color:#e2e8f2;background:#171c24;font:10px/1.6 inherit}
+.ai-compose textarea:focus{border-color:#6986bc}
+.ai-compose>div{display:flex;align-items:center;gap:6px}
+.ai-compose>div span{flex:1;overflow:hidden;color:#7f8da2;font-size:9px;text-overflow:ellipsis;white-space:nowrap;direction:ltr}
+.ai-compose button{height:28px;display:flex;align-items:center;gap:5px;padding:0 8px;border:1px solid #4a6089;border-radius:4px;color:#dce7fa;background:#2d4266;font-size:9px}
+.ai-compose button:disabled{opacity:.35}
+.ai-footnote{margin:0;color:#718097;font-size:8px;line-height:1.5}

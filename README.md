@@ -27,7 +27,8 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [ ] Replace the initial textarea input adapter with the custom virtualized editor surface
 - [ ] Grammar-aware parsing, semantic highlighting, and language-aware editing
 - [ ] Interactive PTY terminal and configurable task runner
-- [ ] Local AI provider adapters
+- [x] Read-only local AI chat through Ollama on loopback, with optional active-file context
+- [ ] Approved AI diff application and additional local provider adapters
 
 ## Technology
 
@@ -35,6 +36,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - **UI:** React + TypeScript + Vite
 - **Editor core:** original TypeScript text-buffer implementation; no Monaco or CodeMirror
 - **Native operations:** Rust commands for local file and directory access
+- **Local AI:** optional Ollama integration over `127.0.0.1` only; no cloud endpoint
 - **Tests:** Vitest and Windows CI
 
 ## Development

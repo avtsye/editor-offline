@@ -25,9 +25,10 @@ Editor Offline is an original desktop application, not a distribution of VS Code
    - LSP for language intelligence.
    - DAP for debugging.
    - A first local command runner executes user-entered shell commands in the workspace; interactive PTY sessions and configurable tasks remain planned.
-5. **Local AI — planned**
-   - Provider interface for local runtimes such as Ollama and llama.cpp-compatible endpoints.
-   - Explicit approval before applying edits or running commands.
+5. **Local AI — first adapter implemented**
+   - Read-only chat with Ollama through the loopback address `127.0.0.1:11434`.
+   - Optional active-file context is sent only to the local Ollama process.
+   - The assistant cannot edit files or run commands; approved diff application and additional local providers remain planned.
    - No cloud provider is required for normal operation.
 
 ## Non-goals

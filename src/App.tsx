@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, PanelRightClose, Play, Plus, Replace, RotateCw, Save, Search, Settings2, Terminal, Trash2, X } from "lucide-react";
+import { Activity, Bot, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File, FileCode2, FilePlus2, Files, Folder, FolderOpen, FolderPlus, GitBranch, HardDrive, Keyboard, PanelRightClose, Play, Plus, RefreshCw, Replace, RotateCw, Save, Search, Send, Settings2, Terminal, Trash2, X } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
@@ -12,6 +12,7 @@ type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
 type CommandResult = { stdout: string; stderr: string; exit_code: number | null; success: boolean };
 type ProjectSearchResult = { path: string; line_number: number; preview: string };
+type LocalChatMessage = { role: "user" | "assistant" | "system"; content: string };
 const WELCOME = ["ברוכים הבאים ל־Editor Offline", "", "סביבת פיתוח עצמאית, מקומית וקלה.", "", "פתחו קובץ או תיקייה כדי להתחיל לעבוד.", "זהו שלב הבסיס של סביבת הפיתוח; מנוע העריכה ושירותי השפה מתפתחים בהדרגה."].join("\n");
 const FILTERS = [{ name: "קובצי קוד וטקסט", extensions: ["txt","md","js","jsx","ts","tsx","py","rs","json","html","css","toml","yaml","yml","xml","c","h","cpp","hpp","cs","java","dart","go","php","sql","sh","bat","ps1"] }, { name: "כל הקבצים", extensions: ["*"] }];
 const id = () => globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
@@ -43,7 +44,14 @@ export default function App() {
   const [palette,setPalette] = useState(false);
   const [paletteQuery,setPaletteQuery] = useState("");
   const [sidebar,setSidebar] = useState(true);
-  const [sidebarView,setSidebarView] = useState<"files"|"search">("files");
+  const [sidebarView,setSidebarView] = useState<"files"|"search"|"ai">("files");
+  const [localModels,setLocalModels] = useState<string[]>([]);
+  const [selectedLocalModel,setSelectedLocalModel] = useState("");
+  const [aiMessages,setAiMessages] = useState<LocalChatMessage[]>([]);
+  const [aiInput,setAiInput] = useState("");
+  const [aiBusy,setAiBusy] = useState(false);
+  const [aiStatus,setAiStatus] = useState("טרם נבדק");
+  const [includeActiveFile,setIncludeActiveFile] = useState(false);
   const [projectSearchQuery,setProjectSearchQuery] = useState("");
   const [projectSearchResults,setProjectSearchResults] = useState<ProjectSearchResult[]>([]);
   const [projectSearchBusy,setProjectSearchBusy] = useState(false);
@@ -57,6 +65,7 @@ export default function App() {
   const findInput = useRef<HTMLInputElement>(null);
   const paletteInput = useRef<HTMLInputElement>(null);
   const projectSearchInput = useRef<HTMLInputElement>(null);
+  const aiInputRef = useRef<HTMLTextAreaElement>(null);
   const buffers = useRef(new Map<string, TextBuffer>([["welcome", new TextBuffer(WELCOME)]]));
   const selections = useRef(new Map<string, { start: number; end: number }>());
   const desktop = isTauri();
@@ -216,6 +225,43 @@ export default function App() {
     }catch(error){notify("המחיקה נכשלה: "+String(error));}
   };
 
+  const loadLocalModels=async()=>{
+    setAiStatus("בודק חיבור ל־Ollama…");
+    try{
+      const models=await invoke<string[]>("list_local_models");
+      setLocalModels(models);
+      setSelectedLocalModel(current=>current&&models.includes(current)?current:models[0]??"");
+      setAiStatus(models.length?`מחובר · ${models.length} מודלים`:"Ollama פועל, אך לא נמצאו מודלים");
+      if(!models.length)notify("Ollama זמין. יש להתקין מודל מקומי דרך Ollama.");
+    }catch(error){
+      setAiStatus("לא מחובר");
+      notify("לא ניתן להתחבר ל־Ollama המקומי: "+String(error));
+    }
+  };
+  const sendLocalChat=async()=>{
+    const prompt=aiInput.trim();
+    if(!prompt||aiBusy)return;
+    if(!selectedLocalModel){notify("יש לבחור מודל מקומי תחילה");return;}
+    const nextMessages:LocalChatMessage[]=[...aiMessages,{role:"user",content:prompt}];
+    const requestMessages:LocalChatMessage[]=[];
+    if(includeActiveFile&&active?.path){
+      const fileContext=text.slice(0,25_000);
+      requestMessages.push({
+        role:"system",
+        content:`אתה עוזר תכנות מקומי. נתח את הקובץ המצורף, אך אל תניח שיש לך הרשאה לשנות קבצים או להריץ פקודות. קובץ: ${active.path}\\n\\n${fileContext}${text.length>25_000?"\\n[הקובץ קוצר ל־25,000 תווים]":""}`,
+      });
+    }
+    requestMessages.push(...nextMessages);
+    setAiMessages(nextMessages);
+    setAiInput("");
+    setAiBusy(true);
+    try{
+      const response=await invoke<string>("chat_local_model",{model:selectedLocalModel,messages:requestMessages});
+      setAiMessages(old=>[...old,{role:"assistant",content:response}]);
+    }catch(error){
+      setAiMessages(old=>[...old,{role:"assistant",content:"הבקשה נכשלה: "+String(error)}]);
+    }finally{setAiBusy(false);}
+  };
   const runProjectSearch=async()=>{
     const searchTerm=projectSearchQuery.trim();
     if(!searchTerm)return;
@@ -356,7 +402,7 @@ export default function App() {
   };
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
-    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="search-workspace"){setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);} if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
+    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="search-workspace"){setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);} if(cmd==="local-ai"){setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);} if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
     if(cmd==="find"||cmd==="replace"){setFindOpen(true);setReplaceOpen(cmd==="replace");window.setTimeout(()=>findInput.current?.focus(),0);}
     if(cmd==="goto")goToLine();
     if(cmd==="zoom+")setFontSize(v=>Math.min(22,v+1));if(cmd==="zoom-")setFontSize(v=>Math.max(11,v-1));
@@ -381,6 +427,7 @@ export default function App() {
       else if(mod&&e.key.toLowerCase()==="f"){e.preventDefault();setFindOpen(true);setReplaceOpen(false);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="h"){e.preventDefault();setFindOpen(true);setReplaceOpen(true);window.setTimeout(()=>findInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="g"){e.preventDefault();goToLine();}
+      else if(mod&&e.shiftKey&&e.key.toLowerCase()==="a"){e.preventDefault();setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);}
       else if(mod&&e.key==="`"){e.preventDefault();setTerminalOpen(v=>!v);}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="p"){e.preventDefault();setPalette(true);window.setTimeout(()=>paletteInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="z"&&e.target===editor.current){e.preventDefault();if(e.shiftKey)redo();else undo();}
@@ -433,7 +480,7 @@ export default function App() {
     <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
     <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
-  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["search-workspace","חיפוש בפרויקט","Ctrl+Shift+F"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
+  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["search-workspace","חיפוש בפרויקט","Ctrl+Shift+F"],["local-ai","עוזר AI מקומי","Ctrl+Shift+A"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
   const filtered=commands.filter(c=>c[1].includes(paletteQuery));
 
   return <main className="app" dir="rtl">
@@ -445,12 +492,12 @@ export default function App() {
       </div>
     </header>
     <section className="workbench">
-      <nav className="activity"><button className={sidebarView==="files"?"chosen":""} title="סייר קבצים" onClick={()=>{setSidebar(true);setSidebarView("files");}}><Files/></button><button className={sidebarView==="search"?"chosen":""} title="חיפוש בפרויקט · Ctrl+Shift+F" onClick={()=>{setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);}}><Search/></button><div/><button title="הגדלת גופן" onClick={()=>setFontSize(v=>Math.min(22,v+1))}><Settings2/></button><span>EO</span></nav>
+      <nav className="activity"><button className={sidebarView==="files"?"chosen":""} title="סייר קבצים" onClick={()=>{setSidebar(true);setSidebarView("files");}}><Files/></button><button className={sidebarView==="search"?"chosen":""} title="חיפוש בפרויקט · Ctrl+Shift+F" onClick={()=>{setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);}}><Search/></button><button className={sidebarView==="ai"?"chosen":""} title="עוזר AI מקומי · Ctrl+Shift+A" onClick={()=>{setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();}}><Bot/></button><div/><button title="הגדלת גופן" onClick={()=>setFontSize(v=>Math.min(22,v+1))}><Settings2/></button><span>EO</span></nav>
       {sidebar&&<aside className="sidebar">
-        <div className="side-title">{sidebarView==="files"?"סייר":"חיפוש בפרויקט"} <button title="הסתרת סרגל" onClick={()=>setSidebar(false)}><PanelRightClose size={15}/></button></div>
+        <div className="side-title">{sidebarView==="files"?"סייר":sidebarView==="search"?"חיפוש בפרויקט":"AI מקומי"} <button title="הסתרת סרגל" onClick={()=>setSidebar(false)}><PanelRightClose size={15}/></button></div>
         {sidebarView==="files"?<><div className="section-title"><span title={activeDirectory??rootName}>{activeDirectory?.split(/[\\/]/).filter(Boolean).pop()??rootName}</span><div className="section-actions"><button title="קובץ חדש בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFile()}><FilePlus2 size={14}/></button><button title="תיקייה חדשה בתיקייה הנבחרת" disabled={!activeDirectory} onClick={()=>void createWorkspaceFolder()}><FolderPlus size={14}/></button><button title="רענון תיקייה" disabled={!activeDirectory} onClick={()=>activeDirectory&&void readDir(activeDirectory)}><RotateCw size={14}/></button></div></div>
         <div className="tree">{root?(cache[root]?tree(cache[root]):<p>טוען תיקייה…</p>):<div className="empty"><FolderOpen size={27}/><span>עדיין לא נפתחה תיקיית עבודה</span><button onClick={()=>void openFolder()}>פתיחת תיקייה</button></div>}</div>
-        <div className="open-tabs"><div className="section-title">קבצים פתוחים <span>{tabs.length}</span></div>{tabs.map(t=><button key={t.id} className={t.id===activeId?"on":""} onClick={()=>switchTab(t)}><FileCode2 size={14}/>{t.title}{t.dirty&&<Circle size={7} fill="currentColor"/>}</button>)}</div></>:<div className="project-search">
+        <div className="open-tabs"><div className="section-title">קבצים פתוחים <span>{tabs.length}</span></div>{tabs.map(t=><button key={t.id} className={t.id===activeId?"on":""} onClick={()=>switchTab(t)}><FileCode2 size={14}/>{t.title}{t.dirty&&<Circle size={7} fill="currentColor"/>}</button>)}</div></>:sidebarView==="search"?<div className="project-search">
           <form className="project-search-form" onSubmit={event=>{event.preventDefault();void runProjectSearch();}}>
             <input ref={projectSearchInput} value={projectSearchQuery} onChange={event=>setProjectSearchQuery(event.target.value)} placeholder="חיפוש בכל קובצי הפרויקט…" />
             <button type="submit" disabled={projectSearchBusy||!projectSearchQuery.trim()}><Search size={14}/></button>
@@ -459,6 +506,19 @@ export default function App() {
           <div className="project-results">{projectSearchResults.map((result,index)=><button key={result.path+":"+result.line_number+":"+index} onClick={()=>void openPath(result.path,result.line_number)}>
             <b>{result.path.split(/[\\/]/).pop()}</b><small>שורה {result.line_number} · {result.preview}</small><em>{result.path}</em>
           </button>)}</div>
+        </div>:<div className="local-ai">
+          <div className="ai-toolbar"><div><b>Ollama מקומי</b><small>{aiStatus}</small></div><button title="בדיקת חיבור וטעינת מודלים" onClick={()=>void loadLocalModels()} disabled={aiBusy}><RefreshCw size={14}/></button></div>
+          <select className="ai-model-select" value={selectedLocalModel} onChange={event=>setSelectedLocalModel(event.target.value)} disabled={!localModels.length||aiBusy}>
+            {!localModels.length&&<option value="">אין מודלים טעונים</option>}
+            {localModels.map(model=><option key={model} value={model}>{model}</option>)}
+          </select>
+          <label className="ai-context-toggle"><input type="checkbox" checked={includeActiveFile} onChange={event=>setIncludeActiveFile(event.target.checked)} disabled={!active?.path||aiBusy}/>כלול את הקובץ הפתוח בהקשר המקומי</label>
+          <div className="ai-messages">{aiMessages.length?aiMessages.map((message,index)=><div key={index} className={"ai-message "+message.role}><small>{message.role==="user"?"אתה":message.role==="assistant"?"המודל":"הקשר"}</small><p>{message.content}</p></div>):<div className="ai-empty"><Bot size={24}/><b>עוזר תכנות מקומי</b><span>התחבר ל־Ollama, בחר מודל ושאל שאלה. התוכן נשלח רק לשרת המקומי במחשב.</span></div>}</div>
+          <form className="ai-compose" onSubmit={event=>{event.preventDefault();void sendLocalChat();}}>
+            <textarea ref={aiInputRef} value={aiInput} onChange={event=>setAiInput(event.target.value)} placeholder="כתוב שאלה למודל המקומי…" disabled={!selectedLocalModel||aiBusy} rows={3}/>
+            <div><button type="button" title="ניקוי השיחה" onClick={()=>setAiMessages([])} disabled={!aiMessages.length||aiBusy}><Trash2 size={13}/></button><span>{selectedLocalModel||"אין מודל נבחר"}</span><button type="submit" disabled={!selectedLocalModel||!aiInput.trim()||aiBusy}><Send size={14}/>{aiBusy?"ממתין…":"שלח"}</button></div>
+          </form>
+          <p className="ai-footnote">ללא ענן וללא שליחת קוד החוצה. העוזר אינו משנה קבצים ואינו מריץ פקודות.</p>
         </div>}
       </aside>}
       <section className="editor">

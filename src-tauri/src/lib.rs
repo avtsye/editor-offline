@@ -1,7 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 #[derive(Debug, Serialize)]
 struct FileEntry {
@@ -16,6 +17,63 @@ struct CommandOutput {
     stderr: String,
     exit_code: Option<i32>,
     success: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct LocalChatMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaModelsResponse {
+    models: Vec<OllamaModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaModel {
+    name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct OllamaChatRequest<'a> {
+    model: &'a str,
+    messages: &'a [LocalChatMessage],
+    stream: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaChatResponse {
+    message: OllamaChatResponseMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaChatResponseMessage {
+    content: String,
+}
+
+fn validate_local_chat_request(model: &str, messages: &[LocalChatMessage]) -> Result<(), String> {
+    if model.trim().is_empty() || model.len() > 160 {
+        return Err("יש לבחור מודל מקומי תקין.".into());
+    }
+    if messages.is_empty() || messages.len() > 32 {
+        return Err("השיחה חייבת להכיל בין הודעה אחת ל־32 הודעות.".into());
+    }
+
+    let mut total_bytes = 0usize;
+    for message in messages {
+        if !["system", "user", "assistant"].contains(&message.role.as_str()) {
+            return Err("תפקיד הודעה לא תקין.".into());
+        }
+        if message.content.len() > 40_000 {
+            return Err("הודעה בודדת ארוכה מדי.".into());
+        }
+        total_bytes += message.content.len();
+    }
+    if total_bytes > 100_000 {
+        return Err("ההקשר המצטבר ארוך מדי לבקשה אחת.".into());
+    }
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -298,6 +356,67 @@ fn delete_path(path: String) -> Result<(), String> {
     }
 }
 
+
+#[tauri::command]
+async fn list_local_models() -> Result<Vec<String>, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .map_err(|error| format!("יצירת חיבור מקומי נכשלה: {}", error))?;
+    let response = client
+        .get("http://127.0.0.1:11434/api/tags")
+        .send()
+        .await
+        .map_err(|_| "לא ניתן להתחבר ל־Ollama בכתובת המקומית 127.0.0.1:11434. יש לוודא שהוא פועל.".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("Ollama החזיר שגיאת HTTP: {}", response.status()));
+    }
+
+    let mut models = response
+        .json::<OllamaModelsResponse>()
+        .await
+        .map_err(|error| format!("תשובת Ollama אינה תקינה: {}", error))?
+        .models
+        .into_iter()
+        .map(|model| model.name)
+        .collect::<Vec<_>>();
+    models.sort();
+    Ok(models)
+}
+
+#[tauri::command]
+async fn chat_local_model(model: String, messages: Vec<LocalChatMessage>) -> Result<String, String> {
+    validate_local_chat_request(&model, &messages)?;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(180))
+        .build()
+        .map_err(|error| format!("יצירת חיבור מקומי נכשלה: {}", error))?;
+    let request = OllamaChatRequest {
+        model: &model,
+        messages: &messages,
+        stream: false,
+    };
+    let response = client
+        .post("http://127.0.0.1:11434/api/chat")
+        .json(&request)
+        .send()
+        .await
+        .map_err(|_| "הבקשה למודל המקומי נכשלה. בדקו ש־Ollama עדיין פועל.".to_string())?;
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        let detail = body.chars().take(240).collect::<String>();
+        return Err(format!("Ollama החזיר HTTP {}: {}", status, detail));
+    }
+
+    let response = response
+        .json::<OllamaChatResponse>()
+        .await
+        .map_err(|error| format!("תשובת המודל אינה תקינה: {}", error))?;
+    Ok(response.message.content)
+}
+
 #[tauri::command]
 fn get_app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -318,6 +437,8 @@ pub fn run() {
             delete_path,
             run_workspace_command,
             search_workspace,
+            list_local_models,
+            chat_local_model,
             get_app_version
         ])
         .run(tauri::generate_context!())
@@ -462,3 +583,25 @@ mod tests {
         std::fs::remove_dir_all(root).expect("temporary directory should be removed");
     }
 }
+
+    #[test]
+    fn local_ai_rejects_invalid_roles_and_oversized_context() {
+        let valid = LocalChatMessage {
+            role: "user".into(),
+            content: "hello".into(),
+        };
+        assert!(validate_local_chat_request("qwen2.5-coder", &[valid]).is_ok());
+
+        let invalid_role = LocalChatMessage {
+            role: "tool".into(),
+            content: "run this".into(),
+        };
+        assert!(validate_local_chat_request("qwen2.5-coder", &[invalid_role]).is_err());
+
+        let oversized = LocalChatMessage {
+            role: "user".into(),
+            content: "x".repeat(40_001),
+        };
+        assert!(validate_local_chat_request("qwen2.5-coder", &[oversized]).is_err());
+    }
+
