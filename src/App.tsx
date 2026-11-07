@@ -8,6 +8,7 @@ import { sliceTokens } from "./core/token-slice";
 import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
 import { getVisibleLineRange } from "./core/viewport";
 import { indentSelection, moveLines, toggleLineComment } from "./core/editor-commands";
+import { detectProjectTasks, type ProjectTask } from "./core/project-tasks";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
@@ -83,6 +84,8 @@ export default function App() {
   const [commandInput,setCommandInput] = useState("");
   const [commandOutput,setCommandOutput] = useState("");
   const [commandRunning,setCommandRunning] = useState(false);
+  const [detectedTasks,setDetectedTasks] = useState<ProjectTask[]>([]);
+  const [selectedTaskId,setSelectedTaskId] = useState("");
   const [viewport,setViewport] = useState({top:0,height:600});
   const [rootName,setRootName] = useState("ללא תיקייה פתוחה");
   const [cache,setCache] = useState<Record<string,FileEntry[]>>({});
@@ -211,12 +214,30 @@ export default function App() {
       setCache(old=>({...old,[path]:entries}));
     } catch(e){notify("קריאת התיקייה נכשלה: "+String(e));}
   };
+  const refreshProjectTasks=async(directory:string)=>{
+    try{
+      const entries=await invoke<FileEntry[]>("read_directory",{path:directory});
+      const names=entries.map(entry=>entry.name);
+      const manifestEntry=entries.find(entry=>entry.name.toLowerCase()==="package.json"&&!entry.is_dir);
+      let manifest:string|undefined;
+      if(manifestEntry){
+        try{manifest=await invoke<string>("read_text_file",{path:manifestEntry.path});}catch{/* Other project types remain detectable. */}
+      }
+      const tasks=detectProjectTasks(names,manifest);
+      setDetectedTasks(tasks);
+      setSelectedTaskId(current=>tasks.some(task=>task.id===current)?current:tasks[0]?.id??"");
+    }catch(error){
+      setDetectedTasks([]);
+      setSelectedTaskId("");
+      notify("זיהוי משימות הפרויקט נכשל: "+String(error));
+    }
+  };
   const openFolder = async () => {
     if(!desktop){notify("פתיחת תיקיות זמינה ביישום Windows");return;}
     const path=await open({directory:true,multiple:false});
     if(typeof path!=="string")return;
     setRoot(path);setActiveDirectory(path);setRootName(path.split(/[\\/]/).filter(Boolean).pop()||path);
-    setCache({});setExpanded(new Set([path]));setProjectSearchResults([]);setSidebarView("files");await readDir(path);setSidebar(true);
+    setCache({});setExpanded(new Set([path]));setProjectSearchResults([]);setSidebarView("files");await readDir(path);await refreshProjectTasks(path);setSidebar(true);
   };
   const createWorkspaceFile=async()=>{
     if(!desktop||!activeDirectory){notify("יש לפתוח תיקיית עבודה תחילה");return;}
@@ -384,6 +405,22 @@ export default function App() {
       setCommandRunning(false);
     }
   };
+  const runSelectedProjectTask=async()=>{
+    const task=detectedTasks.find(item=>item.id===selectedTaskId);
+    if(!task){notify("לא זוהו משימות הרצה. אפשר להריץ פקודה ידנית במסוף.");setTerminalOpen(true);return;}
+    if(!desktop||!root){notify("יש לפתוח תיקיית עבודה תחילה");return;}
+    const background=/^(npm:(dev|start|serve|watch)|cargo:run|python:(main|app)|go:run|dotnet:run)$/.test(task.id);
+    setTerminalOpen(true);
+    if(background){
+      try{
+        const pid=await invoke<number>("start_project_process",{directory:root,command:task.command});
+        setCommandOutput(old=>old+`\\n> ${task.command}\\n[התהליך הופעל בחלון מסוף נפרד · PID ${pid}]\\n`);
+        notify("הפרויקט הופעל בחלון מסוף נפרד");
+      }catch(error){setCommandOutput(old=>old+"שגיאה: "+String(error)+"\\n");notify("הפעלת הפרויקט נכשלה");}
+      return;
+    }
+    await runWorkspaceCommand(task.command);
+  };
   const saveTab = async (tab:Tab) => {
     if(!desktop){notify("שמירה זמינה ביישום Windows");return;}
     let path=tab.path;
@@ -494,7 +531,7 @@ export default function App() {
   };
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
-    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="search-workspace"){setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);} if(cmd==="local-ai"){setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);} if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
+    if(cmd==="new")newFile(); if(cmd==="workspace-file")void createWorkspaceFile(); if(cmd==="workspace-folder")void createWorkspaceFolder(); if(cmd==="terminal")setTerminalOpen(true); if(cmd==="run-project")void runSelectedProjectTask(); if(cmd==="search-workspace"){setSidebar(true);setSidebarView("search");window.setTimeout(()=>projectSearchInput.current?.focus(),0);} if(cmd==="local-ai"){setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);} if(cmd==="open")void openFile(); if(cmd==="folder")void openFolder(); if(cmd==="save")void saveActive();
     if(cmd==="find"||cmd==="replace"){setFindOpen(true);setReplaceOpen(cmd==="replace");window.setTimeout(()=>findInput.current?.focus(),0);}
     if(cmd==="goto")goToLine();
     if(cmd==="comment"){
@@ -529,7 +566,7 @@ export default function App() {
       else if(e.altKey&&(e.key==="ArrowUp"||e.key==="ArrowDown")&&e.target===editor.current){e.preventDefault();const selected=selections.current.get(activeId)??{start:editor.current?.selectionStart??0,end:editor.current?.selectionEnd??0};const result=moveLines(text,selected.start,selected.end,e.key==="ArrowUp"?-1:1);if(result.text!==text)edit(result.text,{start:result.selectionStart,end:result.selectionEnd});}
       else if(mod&&e.key==="/"&&e.target===editor.current){e.preventDefault();const marker:Record<string,string>={js:"//",jsx:"//",ts:"//",tsx:"//",py:"#",rs:"//",go:"//",java:"//",cs:"//",c:"//",cpp:"//",h:"//",hpp:"//",dart:"//",css:"//",sql:"--",sh:"#",bash:"#",ps1:"#",yaml:"#",yml:"#",toml:"#"};const selected=selections.current.get(activeId)??{start:editor.current?.selectionStart??0,end:editor.current?.selectionEnd??0};const token=marker[languageId(active?.path??null)];if(token){const result=toggleLineComment(text,selected.start,selected.end,token);edit(result.text,{start:result.selectionStart,end:result.selectionEnd});}}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="a"){e.preventDefault();setSidebar(true);setSidebarView("ai");if(!localModels.length)void loadLocalModels();window.setTimeout(()=>aiInputRef.current?.focus(),0);}
-      else if(mod&&e.key==="`"){e.preventDefault();setTerminalOpen(v=>!v);}
+      else if(mod&&e.key==="`"){e.preventDefault();setTerminalOpen(v=>!v);}\n      else if(e.key==="F5"){e.preventDefault();void runSelectedProjectTask();}
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="p"){e.preventDefault();setPalette(true);window.setTimeout(()=>paletteInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="z"&&e.target===editor.current){e.preventDefault();if(e.shiftKey)redo();else undo();}
       else if(mod&&e.key.toLowerCase()==="y"&&e.target===editor.current){e.preventDefault();redo();}
@@ -614,7 +651,7 @@ export default function App() {
     <div key={entry.path}><button className={"tree-row"+(activeDirectory===entry.path?" selected":"")} style={{paddingRight:12+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>{setActiveDirectory(entry.path);toggle(entry);}}>{expanded.has(entry.path)?<ChevronDown size={14}/>:<ChevronLeft size={14}/>}<Folder size={15} className="folder-icon"/><span>{entry.name}</span></button>{expanded.has(entry.path)&&cache[entry.path]&&tree(cache[entry.path],depth+1)}</div>:
     <button key={entry.path} className={"tree-row"+(active?.path===entry.path?" selected":"")} style={{paddingRight:30+depth*14}} onContextMenu={event=>{event.preventDefault();setContextMenu({entry,x:event.clientX,y:event.clientY});}} onClick={()=>void openPath(entry.path)}><FileCode2 size={14}/><span>{entry.name}</span></button>
   );
-  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות",""],["search-workspace","חיפוש בפרויקט","Ctrl+Shift+F"],["local-ai","עוזר AI מקומי","Ctrl+Shift+A"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["comment","הערה/ביטול הערה בשורות","Ctrl+/"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
+  const commands=[["new","קובץ חדש","Ctrl+N"],["workspace-file","קובץ חדש בתיקייה הנבחרת",""],["workspace-folder","תיקייה חדשה בתיקייה הנבחרת",""],["terminal","פתיחת מסוף פקודות","Ctrl+`"],["run-project","הרצת הפרויקט","F5"],["search-workspace","חיפוש בפרויקט","Ctrl+Shift+F"],["local-ai","עוזר AI מקומי","Ctrl+Shift+A"],["open","פתיחת קובץ","Ctrl+O"],["folder","פתיחת תיקייה","Ctrl+Shift+O"],["save","שמירת קובץ","Ctrl+S"],["find","חיפוש בקובץ","Ctrl+F"],["replace","חיפוש והחלפה","Ctrl+H"],["goto","מעבר לשורה","Ctrl+G"],["comment","הערה/ביטול הערה בשורות","Ctrl+/"],["zoom+","הגדלת גופן",""],["zoom-","הקטנת גופן",""]];
   const filtered=commands.filter(c=>c[1].includes(paletteQuery));
 
   return <main className="app" dir="rtl">
@@ -622,7 +659,7 @@ export default function App() {
       <div className="brand"><div className="brand-icon"><Code2 size={20}/></div><div><b>Editor Offline</b><small>סביבת פיתוח מקומית</small></div></div>
       <div className="workspace-name">{rootName}<ChevronDown size={13}/></div>
       <div className="top-actions">
-        <button title="קובץ חדש · Ctrl+N" onClick={newFile}><FilePlus2/></button><button title="פתיחת קובץ · Ctrl+O" onClick={()=>void openFile()}><File/></button><button title="פתיחת תיקייה · Ctrl+Shift+O" onClick={()=>void openFolder()}><FolderOpen/></button><i/><button title="שמירה · Ctrl+S" disabled={!active?.dirty||busy} onClick={()=>void saveActive()}><Save/></button>
+        <button title="קובץ חדש · Ctrl+N" onClick={newFile}><FilePlus2/></button><button title="פתיחת קובץ · Ctrl+O" onClick={()=>void openFile()}><File/></button><button title="פתיחת תיקייה · Ctrl+Shift+O" onClick={()=>void openFolder()}><FolderOpen/></button><i/><button title="שמירה · Ctrl+S" disabled={!active?.dirty||busy} onClick={()=>void saveActive()}><Save/></button><button className="run-project-button" title="הרצת הפרויקט / המשימה שנבחרה" disabled={!root||!detectedTasks.length||commandRunning} onClick={()=>void runSelectedProjectTask()}><Play size={15}/></button>
       </div>
     </header>
     <section className="workbench">
@@ -677,7 +714,7 @@ export default function App() {
           </div>
         </div></div>}
         {terminalOpen&&<div className="command-panel">
-          <div className="command-header"><b><Terminal size={14}/> מסוף פקודות</b><span>{rootName}</span><button title="ניקוי פלט" onClick={()=>setCommandOutput("")}><Trash2 size={13}/></button><button title="סגירה" onClick={()=>setTerminalOpen(false)}><X size={14}/></button></div>
+          <div className="command-header"><b><Terminal size={14}/> מסוף פקודות</b><span>{rootName}</span>{detectedTasks.length>0&&<select aria-label="משימת פרויקט" className="task-select" value={selectedTaskId} onChange={event=>setSelectedTaskId(event.target.value)}>{detectedTasks.map(task=><option key={task.id} value={task.id}>{task.label}</option>)}</select>}<button title="ניקוי פלט" onClick={()=>setCommandOutput("")}><Trash2 size={13}/></button><button title="סגירה" onClick={()=>setTerminalOpen(false)}><X size={14}/></button></div>
           <pre className="command-output">{commandOutput||"הפקודות רצות מקומית בתיקיית העבודה. לדוגמה: npm test או cargo check"}</pre>
           <form className="command-input" onSubmit={event=>{event.preventDefault();void runWorkspaceCommand();}}>
             <span>PS / CMD</span><input value={commandInput} onChange={event=>setCommandInput(event.target.value)} placeholder="הקלד פקודה להרצה…" disabled={commandRunning||!root}/>
