@@ -3,67 +3,47 @@ import type { SyntaxToken } from "./tokenizer";
 const OPEN_TO_CLOSE: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
 const CLOSE_TO_OPEN: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
 
-/**
- * Returns the source offsets of the bracket under (or immediately before) the
- * caret and its partner. Only punctuation tokens are considered, so brackets
- * inside strings and comments are ignored.
- */
-export function findMatchingBrackets(
-  tokens: readonly SyntaxToken[],
-  caretOffset: number,
-): [number, number] | null {
-  const brackets: { char: string; offset: number }[] = [];
+/** Build a reusable source-offset lookup once per tokenized document. */
+export function buildBracketPairMap(tokens: readonly SyntaxToken[]): Map<number, number> {
+  const pairs = new Map<number, number>();
+  const stack: { char: string; offset: number }[] = [];
   let offset = 0;
 
   for (const token of tokens) {
     if (token.kind === "punctuation") {
       for (let index = 0; index < token.value.length; index += 1) {
         const char = token.value[index];
-        if (OPEN_TO_CLOSE[char] || CLOSE_TO_OPEN[char]) {
-          brackets.push({ char, offset: offset + index });
+        const at = offset + index;
+        if (OPEN_TO_CLOSE[char]) {
+          stack.push({ char, offset: at });
+          continue;
         }
+        if (!CLOSE_TO_OPEN[char]) continue;
+
+        let matching = stack.length - 1;
+        while (matching >= 0 && stack[matching].char !== CLOSE_TO_OPEN[char]) matching -= 1;
+        if (matching < 0) continue;
+
+        const opener = stack[matching];
+        pairs.set(opener.offset, at);
+        pairs.set(at, opener.offset);
+        // Discard the matched opener and any malformed nested openers above it.
+        stack.length = matching;
       }
     }
     offset += token.value.length;
   }
+  return pairs;
+}
 
-  const caret = Math.max(0, Math.min(caretOffset, offset));
-  const candidate = brackets.find(item => item.offset === caret)
-    ?? [...brackets].reverse().find(item => item.offset === caret - 1);
-  if (!candidate) return null;
-
-  const candidateIndex = brackets.findIndex(item => item.offset === candidate.offset);
-  const stack: number[] = [];
-
-  if (OPEN_TO_CLOSE[candidate.char]) {
-    for (let index = candidateIndex; index < brackets.length; index += 1) {
-      const item = brackets[index];
-      if (OPEN_TO_CLOSE[item.char]) {
-        stack.push(index);
-        continue;
-      }
-      const openerIndex = stack[stack.length - 1];
-      if (openerIndex === undefined) continue;
-      if (OPEN_TO_CLOSE[brackets[openerIndex].char] === item.char) {
-        stack.pop();
-        if (openerIndex === candidateIndex) return [candidate.offset, item.offset];
-      }
-    }
-    return null;
-  }
-
-  for (let index = candidateIndex; index >= 0; index -= 1) {
-    const item = brackets[index];
-    if (CLOSE_TO_OPEN[item.char]) {
-      stack.push(index);
-      continue;
-    }
-    const closerIndex = stack[stack.length - 1];
-    if (closerIndex === undefined) continue;
-    if (CLOSE_TO_OPEN[brackets[closerIndex].char] === item.char) {
-      stack.pop();
-      if (closerIndex === candidateIndex) return [item.offset, candidate.offset];
-    }
-  }
-  return null;
+/** Find the pair at the caret or immediately before it. */
+export function findMatchingBrackets(
+  tokens: readonly SyntaxToken[],
+  caretOffset: number,
+): [number, number] | null {
+  const pairs = buildBracketPairMap(tokens);
+  const caret = Math.max(0, Math.floor(caretOffset));
+  const sourceOffset = pairs.has(caret) ? caret : caret - 1;
+  const partner = pairs.get(sourceOffset);
+  return partner === undefined ? null : [sourceOffset, partner];
 }
