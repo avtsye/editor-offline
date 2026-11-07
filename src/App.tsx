@@ -532,11 +532,33 @@ export default function App() {
     const el=e.currentTarget;
     const start=el.selectionStart;
     const end=el.selectionEnd;
+    const pairs:Record<string,string>={"(":")","[":"]","{":"}","\"":"\"","'":"'"}; 
+    const closingPairs=new Set(Object.values(pairs));
     if(e.key==="Tab"){
       e.preventDefault();
       const next=text.slice(0,start)+"    "+text.slice(end);
       edit(next,{start:start+4,end:start+4});
       return;
+    }
+    if(e.key==="Backspace"&&start===end){
+      const before=text[start-1]??"";
+      const after=text[start]??"";
+      if(pairs[before]===after){
+        e.preventDefault();
+        edit(text.slice(0,start-1)+text.slice(start+1),{start:start-1,end:start-1});
+        return;
+      }
+      const lineStart=start===0?0:text.lastIndexOf("\n",start-1)+1;
+      const indentation=text.slice(lineStart,start);
+      if(/^[\t ]+$/.test(indentation)){
+        const remove=indentation.endsWith("\t")?1:Math.min(4,indentation.length-(indentation.length%4||0));
+        if(remove>0){
+          e.preventDefault();
+          const caret=start-remove;
+          edit(text.slice(0,caret)+text.slice(start),{start:caret,end:caret});
+          return;
+        }
+      }
     }
     if(e.key==="Enter"){
       e.preventDefault();
@@ -551,7 +573,13 @@ export default function App() {
       edit(text.slice(0,start)+insertion+text.slice(end),{start:caret,end:caret});
       return;
     }
-    const pairs:Record<string,string>={"(":")","[":"]","{":"}","\"":"\"","'":"'"}; 
+    if(closingPairs.has(e.key)&&start===end&&text[start]===e.key){
+      e.preventDefault();
+      el.setSelectionRange(start+1,start+1);
+      selections.current.set(activeId,{start:start+1,end:start+1});
+      updateCursor(start+1);
+      return;
+    }
     const closing=pairs[e.key];
     if(closing){
       e.preventDefault();
