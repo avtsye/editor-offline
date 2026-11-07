@@ -26,7 +26,7 @@ Editor Offline is an original desktop application, not a distribution of VS Code
    - DAP for debugging.
    - A first local command runner executes user-entered shell commands in the workspace; interactive PTY sessions and configurable tasks remain planned.
 5. **Local AI — OpenAI-compatible adapter implemented**
-   - Read-only chat and model discovery through configurable local /v1/models and /v1/chat/completions endpoints.
+   - Read-only chat through configurable OpenAI Chat Completions and Anthropic Messages endpoints, with model discovery through /v1/models where available.
    - Presets for Ollama, LM Studio, llama.cpp server, LocalAI, Jan, vLLM, text-generation-webui, and KoboldCpp, plus custom loopback endpoints.
    - The Rust backend rejects non-loopback hosts; provider, endpoint, and model preferences are stored locally; optional bearer tokens are passed only to the validated local endpoint and are not persisted.
    - Optional active-file context is sent only to the selected local server.

@@ -451,7 +451,9 @@ fn delete_path(path: String) -> Result<(), String> {
 async fn list_local_models(
     base_url: String,
     api_key: Option<String>,
+    protocol: String,
 ) -> Result<Vec<String>, String> {
+    validate_local_api_protocol(&protocol)?;
     let base = validate_local_api_base_url(&base_url)?;
     let api_key = api_key.unwrap_or_default();
     validate_local_api_key(&api_key)?;
@@ -462,6 +464,9 @@ async fn list_local_models(
     let mut request = client.get(local_api_endpoint(&base, "models")?);
     if !api_key.trim().is_empty() {
         request = request.bearer_auth(api_key.trim());
+        if protocol == "anthropic" {
+            request = request.header("x-api-key", api_key.trim());
+        }
     }
     let response = request.send().await.map_err(|_| {
         "לא ניתן להתחבר לשרת המקומי. בדקו שהוא פועל ושהכתובת כוללת את נתיב ה־API הנכון.".to_string()

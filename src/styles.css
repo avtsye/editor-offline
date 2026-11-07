@@ -87,3 +87,6 @@
 .ai-endpoint-input:focus,.ai-key-input:focus,.ai-provider-select:focus{outline:0;border-color:#6986bc}
 .ai-endpoint-input::placeholder,.ai-key-input::placeholder{color:#77849a}
 .ai-model-select{direction:ltr;text-align:left}
+
+.ai-protocol-select{width:100%;height:30px;padding:0 8px;border:1px solid #394354;border-radius:5px;color:#dce5f3;background:#1b2029;font-size:10px;direction:rtl;text-align:right}
+.ai-protocol-select:focus{outline:0;border-color:#6986bc}

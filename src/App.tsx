@@ -75,6 +75,7 @@ export default function App() {
     ()=>typeof savedLocalAiPreferences.baseUrl==="string"?savedLocalAiPreferences.baseUrl:"http://127.0.0.1:11434/v1"
   );
   const [localApiKey,setLocalApiKey] = useState("");
+  const [localProtocol,setLocalProtocol] = useState<"openai"|"anthropic">("openai");
   const [localModels,setLocalModels] = useState<string[]>([]);
   const [selectedLocalModel,setSelectedLocalModel] = useState(
     ()=>typeof savedLocalAiPreferences.model==="string"?savedLocalAiPreferences.model:""
@@ -281,7 +282,7 @@ export default function App() {
     if(!localBaseUrl.trim()){setAiStatus("יש להזין כתובת API מקומית");return;}
     setAiStatus("בודק את השרת המקומי…");
     try{
-      const models=await invoke<string[]>("list_local_models",{baseUrl:localBaseUrl,apiKey:localApiKey||null});
+      const models=await invoke<string[]>("list_local_models",{baseUrl:localBaseUrl,apiKey:localApiKey||null,protocol:localProtocol});
       setLocalModels(models);
       setSelectedLocalModel(current=>current||models[0]||"");
       setAiStatus(models.length?"מחובר · "+models.length+" מודלים":"השרת זמין; אפשר להזין מזהה מודל ידנית");
@@ -312,6 +313,7 @@ export default function App() {
       const response=await invoke<string>("chat_local_model",{
         baseUrl:localBaseUrl,
         apiKey:localApiKey||null,
+        protocol:localProtocol,
         model:selectedLocalModel,
         messages:requestMessages,
       });
@@ -569,6 +571,10 @@ export default function App() {
           <select className="ai-provider-select" value={localProvider} onChange={event=>changeLocalProvider(event.target.value)} disabled={aiBusy}>
             {LOCAL_PROVIDERS.map(provider=><option key={provider.id} value={provider.id}>{provider.label}</option>)}
           </select>
+          <select className="ai-protocol-select" value={localProtocol} onChange={event=>{setLocalProtocol(event.target.value as "openai"|"anthropic");setLocalModels([]);setAiStatus("מוכן לבדיקה");}} disabled={aiBusy}>
+            <option value="openai">OpenAI Chat Completions</option>
+            <option value="anthropic">Anthropic Messages</option>
+          </select>
           <input className="ai-endpoint-input" type="url" aria-label="כתובת API מקומית" value={localBaseUrl} onChange={event=>setLocalBaseUrl(event.target.value)} placeholder="http://127.0.0.1:1234/v1" disabled={aiBusy}/>
           <input className="ai-key-input" type="password" aria-label="מפתח גישה אופציונלי" value={localApiKey} onChange={event=>setLocalApiKey(event.target.value)} placeholder="Bearer token (אופציונלי)" disabled={aiBusy} autoComplete="off"/>
           <input className="ai-model-select" list="local-model-options" value={selectedLocalModel} onChange={event=>setSelectedLocalModel(event.target.value)} placeholder="שם מודל (או בחירה מהרשימה)" disabled={aiBusy}/>
@@ -579,7 +585,7 @@ export default function App() {
             <textarea ref={aiInputRef} value={aiInput} onChange={event=>setAiInput(event.target.value)} placeholder="כתוב שאלה למודל המקומי…" disabled={!selectedLocalModel||aiBusy} rows={3}/>
             <div><button type="button" title="ניקוי השיחה" onClick={()=>setAiMessages([])} disabled={!aiMessages.length||aiBusy}><Trash2 size={13}/></button><span>{selectedLocalModel||"אין מודל נבחר"}</span><button type="submit" disabled={!selectedLocalModel||!aiInput.trim()||aiBusy}><Send size={14}/>{aiBusy?"ממתין…":"שלח"}</button></div>
           </form>
-          <p className="ai-footnote">תומך ב־OpenAI-compatible API על localhost. מפתח הגישה נשאר בזיכרון בלבד. העוזר אינו משנה קבצים ואינו מריץ פקודות.</p>
+          <p className="ai-footnote">תומך ב־OpenAI Chat Completions וב־Anthropic Messages בשרת מקומי. מפתח הגישה נשאר בזיכרון בלבד. העוזר אינו משנה קבצים ואינו מריץ פקודות.</p>
         </div>}
       </aside>}
       <section className="editor">
