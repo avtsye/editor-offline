@@ -24,8 +24,7 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Dependency security audit
-        run: npm audit --json
-        continue-on-error: true
+        run: npm audit --audit-level=moderate
       - name: TypeScript check
         run: npm run check
       - name: Unit tests
@@ -50,6 +49,7 @@ jobs:
 
   windows-installers:
     name: Build Windows installers
+    needs: [frontend, rust]
     runs-on: windows-latest
     steps:
       - name: Checkout

@@ -15,10 +15,11 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Independent transactional text buffer with per-tab undo/redo and unit tests
 - [x] Line/column mapping, CRLF handling, and incremental line indexing
 - [x] Indentation, paired brackets, find-next/previous, and replace operations
+- [x] In-house syntax tokenization and layered highlighting for common source formats
 - [x] Windows CI for TypeScript, frontend build, Rust checks, tests, and installer artifacts
 - [ ] Verify MSI/NSIS installers on a Windows machine
 - [ ] Replace the initial textarea input adapter with the custom virtualized editor surface
-- [ ] Syntax highlighting and language-aware editing
+- [ ] Grammar-aware parsing, semantic highlighting, and language-aware editing
 - [ ] Integrated terminal and task runner
 - [ ] Local AI provider adapters
 
