@@ -7,7 +7,7 @@ describe("EditorEngine", () => {
     editor.setSelections([{ anchor: 0, head: 0 }, { anchor: 4, head: 4 }, { anchor: 8, head: 8 }]);
     expect(editor.insertText("> ")).toBe("> one\n> two\n> three");
     expect(editor.getSelections()).toEqual([
-      { anchor: 2, head: 2 }, { anchor: 8, head: 8 }, { anchor: 16, head: 16 },
+      { anchor: 2, head: 2 }, { anchor: 8, head: 8 }, { anchor: 14, head: 14 },
     ]);
   });
 
