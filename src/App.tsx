@@ -6,6 +6,7 @@ import { TextBuffer } from "./core/text-buffer";
 import { tokenize } from "./core/tokenizer";
 import { sliceTokens } from "./core/token-slice";
 import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
+import { getVisibleLineRange } from "./core/viewport";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
@@ -60,8 +61,9 @@ export default function App() {
   const lines = useMemo(()=>Array.from({length:activeBuffer.lineCount},(_,i)=>i+1),[text,activeBuffer.lineCount]);
   const syntaxTokens = useMemo(()=>tokenize(text,languageId(active?.path??null)),[text,active?.path]);
   const lineHeight=fontSize*1.7;
-  const visibleStart=Math.min(Math.max(0,lines.length-1),Math.max(0,Math.floor(viewport.top/lineHeight)-8));
-  const visibleEnd=Math.min(lines.length,Math.max(visibleStart+1,Math.ceil((viewport.top+viewport.height)/lineHeight)+8));
+  const visibleRange=getVisibleLineRange(lines.length,viewport.top,viewport.height,lineHeight,8);
+  const visibleStart=visibleRange.start;
+  const visibleEnd=visibleRange.end;
   const visibleStartOffset=activeBuffer.getLineStart(visibleStart+1);
   const visibleEndOffset=visibleEnd<lines.length?activeBuffer.getLineStart(visibleEnd+1):text.length;
   const visibleTokens=useMemo(
