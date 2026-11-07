@@ -449,7 +449,7 @@ pub fn run() {
 mod tests {
     use super::{
         create_directory_in_directory, create_file_in_directory, delete_path, limit_command_output,
-        rename_path, validate_child_name,
+        rename_path, validate_child_name, validate_local_chat_request, LocalChatMessage,
     };
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -549,7 +549,7 @@ mod tests {
         let mut results = Vec::new();
         append_search_matches(
             Path::new("src/main.rs"),
-            "fn main() {\\n    let Value = 1;\\n    println!(\"done\");\\n}",
+            "fn main() {\n    let Value = 1;\n    println!(\"done\");\n}",
             "value",
             &mut results,
         );
@@ -567,7 +567,7 @@ mod tests {
         std::fs::create_dir(&dependencies).expect("dependency directory should be created");
         std::fs::write(
             source.join("main.rs"),
-            "first line\\nneedle here\\nlast line",
+            "first line\nneedle here\nlast line",
         )
         .expect("source file should be written");
         std::fs::write(dependencies.join("ignored.js"), "needle in dependency")
@@ -582,7 +582,6 @@ mod tests {
         assert!(results[0].path.ends_with("main.rs"));
         std::fs::remove_dir_all(root).expect("temporary directory should be removed");
     }
-}
 
     #[test]
     fn local_ai_rejects_invalid_roles_and_oversized_context() {
@@ -604,4 +603,4 @@ mod tests {
         };
         assert!(validate_local_chat_request("qwen2.5-coder", &[oversized]).is_err());
     }
-
+}
