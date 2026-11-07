@@ -409,7 +409,7 @@ export default function App() {
     const task=detectedTasks.find(item=>item.id===selectedTaskId);
     if(!task){notify("לא זוהו משימות הרצה. אפשר להריץ פקודה ידנית במסוף.");setTerminalOpen(true);return;}
     if(!desktop||!root){notify("יש לפתוח תיקיית עבודה תחילה");return;}
-    const background=/^(npm:(dev|start|serve|watch)|cargo:run|python:(main|app)|go:run|dotnet:run)$/.test(task.id);
+    const background=/^(npm|pnpm|yarn|bun):(dev|start|serve|watch)$/.test(task.id)||/^(cargo:run|python:(main|app)|go:run|dotnet:run)$/.test(task.id);
     setTerminalOpen(true);
     if(background){
       try{
