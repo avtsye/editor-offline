@@ -15,6 +15,8 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Rename workspace files and folders from the explorer context menu
 - [x] Delete files and empty folders with confirmation and unsaved-tab checks
 - [x] Local workspace command runner with bounded output and asynchronous execution
+- [x] Project task detection for npm scripts, Cargo, Python, Go, Make, and .NET
+- [x] F5 project launch, task selection, and separate terminal windows for long-running development servers
 - [x] Tabs, dirty-state indicators, keyboard shortcuts, find/replace
 - [x] Independent transactional text buffer with per-tab undo/redo and unit tests
 - [x] Line/column mapping, CRLF handling, and incremental line indexing
@@ -79,7 +81,7 @@ The current editing surface is an intentionally small native textarea adapter ba
 | F3 / Shift+F3 | Next / previous match |
 | Ctrl+G | Go to line |
 | Ctrl+Shift+F | Search the workspace |
-| Ctrl+Shift+P | Command palette |
+| Ctrl+Shift+P | Command palette |\n| F5 | Run selected project task |
 | Ctrl+` | Toggle command runner |
 | Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z | Undo / redo |
 
