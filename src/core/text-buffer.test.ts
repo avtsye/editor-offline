@@ -65,8 +65,8 @@ describe("TextBuffer", () => {
   });
 
   it("updates line positions incrementally after edits, undo and redo", () => {
-    const buffer = new TextBuffer("first\\nsecond\\nthird");
-    buffer.replaceRange(5, 6, "\\ninserted\\n");
+    const buffer = new TextBuffer("first\nsecond\nthird");
+    buffer.replaceRange(5, 6, "\ninserted\n");
     expect(buffer.lineCount).toBe(4);
     expect(buffer.getLine(2)).toBe("inserted");
     expect(buffer.getLine(3)).toBe("second");
