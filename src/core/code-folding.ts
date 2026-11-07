@@ -92,6 +92,54 @@ export function findFoldRanges(source: string, languageId: string): FoldRange[] 
     }
   }
 
+  if (language === "markdown" || language === "md" || language === "mdx") {
+    const lines = source.split("\n");
+    const headings: { line: number; level: number; title: string }[] = [];
+    let fence: { line: number; marker: string; length: number } | null = null;
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
+      if (fenceMatch) {
+        const markerText = fenceMatch[1];
+        if (!fence) fence = { line: index + 1, marker: markerText[0], length: markerText.length };
+        else if (markerText[0] === fence.marker && markerText.length >= fence.length) {
+          if (index + 1 > fence.line) ranges.push({ startLine: fence.line, endLine: index + 1, kind: "block", label: "code" });
+          fence = null;
+        }
+        continue;
+      }
+      if (fence) continue;
+      const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/);
+      if (heading) headings.push({ line: index + 1, level: heading[1].length, title: heading[2] });
+    }
+    for (let index = 0; index < headings.length; index += 1) {
+      const heading = headings[index];
+      let end = lines.length;
+      for (let next = index + 1; next < headings.length; next += 1) {
+        if (headings[next].level <= heading.level) { end = headings[next].line - 1; break; }
+      }
+      if (end > heading.line) ranges.push({ startLine: heading.line, endLine: end, kind: "region", label: heading.title });
+    }
+    if (fence && lines.length >= fence.line) ranges.push({ startLine: fence.line, endLine: lines.length, kind: "block", label: "code" });
+  }
+
+  if (language === "yaml" || language === "yml") {
+    const lines = source.split("\n");
+    for (let index = 0; index < lines.length - 1; index += 1) {
+      const current = lines[index];
+      if (!current.trim() || /^\s*#/.test(current) || !/:\s*(?:#.*)?$/.test(current) && !/^\s*[-?]\s*$/.test(current)) continue;
+      const baseIndent = current.match(/^\s*/)?.[0].length ?? 0;
+      let end = index + 1;
+      while (end < lines.length) {
+        if (!lines[end].trim() || /^\s*#/.test(lines[end])) { end += 1; continue; }
+        const indent = lines[end].match(/^\s*/)?.[0].length ?? 0;
+        if (indent <= baseIndent) break;
+        end += 1;
+      }
+      if (end - 1 > index) ranges.push({ startLine: index + 1, endLine: end, kind: "indent", label: "…" });
+    }
+  }
+
   // Explicit region markers are supported across common editor conventions.
   const regionStack: { line: number; label: string }[] = [];
   const sourceLines = source.split("\n");
