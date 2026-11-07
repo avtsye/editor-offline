@@ -387,8 +387,8 @@ export default function App() {
     }catch(error){notify("החיפוש בפרויקט נכשל: "+String(error));}
     finally{setProjectSearchBusy(false);}
   };
-  const runWorkspaceCommand=async()=>{
-    const command=commandInput.trim();
+  const runWorkspaceCommand=async(commandOverride?:string)=>{
+    const command=(commandOverride??commandInput).trim();
     if(!command)return;
     if(!desktop){notify("הרצת פקודות זמינה ביישום Windows");return;}
     if(!root){notify("יש לפתוח תיקיית עבודה לפני הרצת פקודות");return;}
