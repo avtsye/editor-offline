@@ -13,6 +13,17 @@ type Tab = { id: string; path: string | null; title: string; content: string; sa
 type CommandResult = { stdout: string; stderr: string; exit_code: number | null; success: boolean };
 type ProjectSearchResult = { path: string; line_number: number; preview: string };
 type LocalChatMessage = { role: "user" | "assistant" | "system"; content: string };
+type LocalAiPreferences = { provider?: string; baseUrl?: string; model?: string };
+const readLocalAiPreferences = (): LocalAiPreferences => {
+  try {
+    const raw = window.localStorage.getItem("editor-offline.local-ai");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as LocalAiPreferences;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
 const LOCAL_PROVIDERS = [
   { id: "ollama", label: "Ollama", baseUrl: "http://127.0.0.1:11434/v1" },
   { id: "lmstudio", label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1" },
@@ -20,6 +31,8 @@ const LOCAL_PROVIDERS = [
   { id: "localai", label: "LocalAI", baseUrl: "http://127.0.0.1:8080/v1" },
   { id: "jan", label: "Jan", baseUrl: "http://127.0.0.1:1337/v1" },
   { id: "vllm", label: "vLLM", baseUrl: "http://127.0.0.1:8000/v1" },
+  { id: "textgen", label: "text-generation-webui", baseUrl: "http://127.0.0.1:5000/v1" },
+  { id: "koboldcpp", label: "KoboldCpp", baseUrl: "http://127.0.0.1:5001/v1" },
   { id: "custom", label: "שרת מקומי מותאם", baseUrl: "" },
 ];
 const WELCOME = ["ברוכים הבאים ל־Editor Offline", "", "סביבת פיתוח עצמאית, מקומית וקלה.", "", "פתחו קובץ או תיקייה כדי להתחיל לעבוד.", "זהו שלב הבסיס של סביבת הפיתוח; מנוע העריכה ושירותי השפה מתפתחים בהדרגה."].join("\n");
@@ -33,6 +46,7 @@ const language = (path: string | null) => {
 };
 
 export default function App() {
+  const [savedLocalAiPreferences] = useState<LocalAiPreferences>(()=>readLocalAiPreferences());
   const [tabs,setTabs] = useState<Tab[]>([{id:"welcome",path:null,title:"ברוכים הבאים",content:WELCOME,saved:WELCOME,dirty:false}]);
   const [activeId,setActiveId] = useState("welcome");
   const [root,setRoot] = useState<string|null>(null);
@@ -54,11 +68,17 @@ export default function App() {
   const [paletteQuery,setPaletteQuery] = useState("");
   const [sidebar,setSidebar] = useState(true);
   const [sidebarView,setSidebarView] = useState<"files"|"search"|"ai">("files");
-  const [localProvider,setLocalProvider] = useState("ollama");
-  const [localBaseUrl,setLocalBaseUrl] = useState("http://127.0.0.1:11434/v1");
+  const [localProvider,setLocalProvider] = useState(
+    ()=>LOCAL_PROVIDERS.some(provider=>provider.id===savedLocalAiPreferences.provider)?savedLocalAiPreferences.provider!:"ollama"
+  );
+  const [localBaseUrl,setLocalBaseUrl] = useState(
+    ()=>typeof savedLocalAiPreferences.baseUrl==="string"?savedLocalAiPreferences.baseUrl:"http://127.0.0.1:11434/v1"
+  );
   const [localApiKey,setLocalApiKey] = useState("");
   const [localModels,setLocalModels] = useState<string[]>([]);
-  const [selectedLocalModel,setSelectedLocalModel] = useState("");
+  const [selectedLocalModel,setSelectedLocalModel] = useState(
+    ()=>typeof savedLocalAiPreferences.model==="string"?savedLocalAiPreferences.model:""
+  );
   const [aiMessages,setAiMessages] = useState<LocalChatMessage[]>([]);
   const [aiInput,setAiInput] = useState("");
   const [aiBusy,setAiBusy] = useState(false);
@@ -98,6 +118,17 @@ export default function App() {
     [syntaxTokens,visibleStartOffset,visibleEndOffset]
   );
   const matches = query ? text.split(query).length-1 : 0;
+  useEffect(()=>{
+    try{
+      window.localStorage.setItem("editor-offline.local-ai",JSON.stringify({
+        provider:localProvider,
+        baseUrl:localBaseUrl,
+        model:selectedLocalModel,
+      }));
+    }catch{
+      // Preferences are optional; the editor remains usable if storage is unavailable.
+    }
+  },[localProvider,localBaseUrl,selectedLocalModel]);
   const notify = (message:string) => { setToast(message); window.setTimeout(()=>setToast(""),2500); };
   const updateCursor = (offset:number) => setCursor(activeBuffer.positionAt(offset));
   const edit = (value:string, selection?:{start:number;end:number}) => {
@@ -241,6 +272,7 @@ export default function App() {
     setLocalProvider(providerId);
     const preset=LOCAL_PROVIDERS.find(provider=>provider.id===providerId);
     setLocalBaseUrl(preset?.baseUrl??"");
+    setLocalApiKey("");
     setLocalModels([]);
     setSelectedLocalModel("");
     setAiStatus("מוכן לבדיקה");

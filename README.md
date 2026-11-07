@@ -36,7 +36,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - **UI:** React + TypeScript + Vite
 - **Editor core:** original TypeScript text-buffer implementation; no Monaco or CodeMirror
 - **Native operations:** Rust commands for local file and directory access
-- **Local AI:** configurable OpenAI-compatible API over loopback only; presets for Ollama, LM Studio, llama.cpp, LocalAI, Jan, and vLLM; custom local endpoint and optional in-memory bearer token; no cloud endpoint
+- **Local AI:** configurable OpenAI-compatible API over loopback only; presets for Ollama, LM Studio, llama.cpp, LocalAI, Jan, vLLM, text-generation-webui, and KoboldCpp; custom local endpoint and optional in-memory bearer token; no cloud endpoint
 - **Tests:** Vitest and Windows CI
 
 ## Development
@@ -102,4 +102,4 @@ MIT. See [LICENSE](LICENSE).
 
 The AI panel speaks the standard OpenAI-compatible /v1/models and /v1/chat/completions endpoints. Presets are provided for Ollama, LM Studio, llama.cpp server, LocalAI, Jan, and vLLM; other local servers can be added with a custom base URL when they implement the same protocol. Use a base URL such as http://127.0.0.1:1234/v1, not the full chat-completions URL.
 
-For privacy, the native backend accepts only localhost, 127.0.0.1, and ::1 hosts; LAN and public hosts are rejected. An optional bearer token is held in application memory for the current session and is not saved. Providers with proprietary APIs (for example, non-OpenAI-compatible endpoints) still need a dedicated adapter.
+For privacy, the native backend accepts only localhost, 127.0.0.1, and ::1 hosts; LAN and public hosts are rejected. Provider, base URL, and model selection are saved locally; an optional bearer token is held in application memory for the current session and is not saved. Providers with proprietary APIs (for example, non-OpenAI-compatible endpoints) still need a dedicated adapter.
