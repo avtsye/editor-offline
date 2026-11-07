@@ -3,15 +3,17 @@ import { Activity, Check, ChevronDown, ChevronLeft, Circle, Code2, Command, File
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
+import { tokenize } from "./core/tokenizer";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
 const WELCOME = ["ברוכים הבאים ל־Editor Offline", "", "סביבת פיתוח עצמאית, מקומית וקלה.", "", "פתחו קובץ או תיקייה כדי להתחיל לעבוד.", "זהו שלב הבסיס של סביבת הפיתוח; מנוע העריכה ושירותי השפה מתפתחים בהדרגה."].join("\n");
 const FILTERS = [{ name: "קובצי קוד וטקסט", extensions: ["txt","md","js","jsx","ts","tsx","py","rs","json","html","css","toml","yaml","yml","xml","c","h","cpp","hpp","cs","java","dart","go","php","sql","sh","bat","ps1"] }, { name: "כל הקבצים", extensions: ["*"] }];
 const id = () => globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
+const languageId = (path: string | null) => path?.split(".").pop()?.toLowerCase() ?? "plain";
 const language = (path: string | null) => {
-  const ext = path?.split(".").pop()?.toLowerCase() ?? "";
-  const names: Record<string,string> = { ts:"TypeScript",tsx:"TypeScript React",js:"JavaScript",jsx:"JavaScript React",py:"Python",rs:"Rust",html:"HTML",css:"CSS",json:"JSON",md:"Markdown",toml:"TOML",yaml:"YAML",yml:"YAML",cpp:"C++",cs:"C#",java:"Java",dart:"Dart",go:"Go",sql:"SQL" };
+  const ext = languageId(path);
+  const names: Record<string,string> = { ts:"TypeScript",tsx:"TypeScript React",js:"JavaScript",jsx:"JavaScript React",py:"Python",rs:"Rust",html:"HTML",xml:"XML",css:"CSS",json:"JSON",md:"Markdown",toml:"TOML",yaml:"YAML",yml:"YAML",c:"C",h:"C",cpp:"C++",hpp:"C++",cs:"C#",java:"Java",dart:"Dart",go:"Go",sql:"SQL" };
   return names[ext] ?? "טקסט רגיל";
 };
 
@@ -35,6 +37,7 @@ export default function App() {
   const [busy,setBusy] = useState(false);
   const editor = useRef<HTMLTextAreaElement>(null);
   const gutter = useRef<HTMLDivElement>(null);
+  const highlight = useRef<HTMLPreElement>(null);
   const findInput = useRef<HTMLInputElement>(null);
   const paletteInput = useRef<HTMLInputElement>(null);
   const buffers = useRef(new Map<string, TextBuffer>([["welcome", new TextBuffer(WELCOME)]]));
@@ -45,6 +48,7 @@ export default function App() {
   const activeBuffer = buffers.current.get(activeId) ?? new TextBuffer(text);
   if (!buffers.current.has(activeId)) buffers.current.set(activeId, activeBuffer);
   const lines = useMemo(()=>Array.from({length:activeBuffer.lineCount},(_,i)=>i+1),[text,activeBuffer.lineCount]);
+  const syntaxTokens = useMemo(()=>tokenize(text,languageId(active?.path??null)),[text,active?.path]);
   const matches = query ? text.split(query).length-1 : 0;
   const notify = (message:string) => { setToast(message); window.setTimeout(()=>setToast(""),2500); };
   const updateCursor = (offset:number) => setCursor(activeBuffer.positionAt(offset));
@@ -287,7 +291,13 @@ export default function App() {
         </div>
         {findOpen&&<div className="findbar"><div><Search size={14}/><input ref={findInput} value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש"/></div>{replaceOpen&&<div><Replace size={14}/><input value={replacement} onChange={e=>setReplacement(e.target.value)} placeholder="החלפה"/></div>}<small>{matches} התאמות</small><button onClick={()=>findMatch(-1)}>הקודם</button><button onClick={()=>findMatch(1)}>הבא</button>{replaceOpen&&<><button onClick={replaceCurrent}>החלף</button><button onClick={replaceAll}>החלף הכול</button></>}<button title="סגירה" onClick={()=>setFindOpen(false)}><X size={14}/></button></div>}
         {active?.id==="welcome"?<div className="welcome"><div className="welcome-card"><div className="hero-icon"><Code2 size={34}/></div><small>OFFLINE-FIRST DEVELOPMENT</small><h1>בונים. מריצים. נשארים מקומיים.</h1><p>סביבת פיתוח עצמאית, מהירה ופתוחה — בלי חשבון, בלי ענן ובלי תלות בשירות חיצוני.</p><div className="welcome-buttons"><button className="primary" onClick={newFile}><FilePlus2 size={16}/>קובץ חדש</button><button onClick={()=>void openFile()}><File size={16}/>פתיחת קובץ</button><button onClick={()=>void openFolder()}><FolderOpen size={16}/>פתיחת תיקייה</button></div><div className="features"><div><Keyboard/><b>קיצורי מקלדת</b><span>Ctrl+N קובץ חדש · Ctrl+S שמירה</span></div><div><HardDrive/><b>מקומי כברירת מחדל</b><span>הקבצים נשארים במחשב שלך</span></div><div><Activity/><b>בפיתוח פעיל</b><span>מנוע עריכה ושירותי שפה בדרך</span></div></div></div></div>:
-        <div className="editor-body"><div className="crumb">{rootName}　›　{active?.title}</div><div className="codearea" style={{fontSize}}><div className="gutter" ref={gutter}>{lines.map(n=><div key={n}>{n}</div>)}</div><textarea ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{if(gutter.current)gutter.current.scrollTop=e.currentTarget.scrollTop;}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/></div></div>}
+        <div className="editor-body"><div className="crumb">{rootName}　›　{active?.title}</div><div className="codearea" style={{fontSize}}>
+          <div className="gutter" ref={gutter}>{lines.map(n=><div key={n}>{n}</div>)}</div>
+          <div className="code-input-wrap">
+            <pre ref={highlight} className="syntax-layer" aria-hidden="true">{syntaxTokens.map((token,index)=><span key={index} className={"tok-"+token.kind}>{token.value}</span>)}</pre>
+            <textarea className="code-input" ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{if(gutter.current)gutter.current.scrollTop=e.currentTarget.scrollTop;if(highlight.current){highlight.current.scrollTop=e.currentTarget.scrollTop;highlight.current.scrollLeft=e.currentTarget.scrollLeft;}}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/>
+          </div>
+        </div></div>}
       </section>
     </section>
     <footer className="status"><div><span><GitBranch size={12}/> main</span><span><Circle size={7} fill="currentColor"/> מוכן</span></div><div><span>שורה {cursor.line}, עמודה {cursor.column}</span><span>UTF-8</span><span>{text.includes("\r\n")?"CRLF":"LF"}</span><span>{language(active?.path??null)}</span><span><HardDrive size={12}/> Offline</span></div></footer>
