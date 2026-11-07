@@ -157,6 +157,25 @@ export default function App() {
     selections.current.set(activeId,next);setCursor(model.positionAt(next.start));
     window.requestAnimationFrame(()=>editor.current?.setSelectionRange(next.start,next.end));
   };
+  const findMatch=(direction:1|-1)=>{
+    if(!query||!editor.current)return;
+    const current=direction>0?editor.current.selectionEnd:editor.current.selectionStart;
+    let index=direction>0?text.indexOf(query,current):text.lastIndexOf(query,Math.max(0,current-query.length-1));
+    if(index<0)index=direction>0?text.indexOf(query):text.lastIndexOf(query);
+    if(index<0){notify("לא נמצאו התאמות");return;}
+    editor.current.focus();
+    editor.current.setSelectionRange(index,index+query.length);
+    selections.current.set(activeId,{start:index,end:index+query.length});
+    updateCursor(index);
+  };
+  const replaceCurrent=()=>{
+    if(!query||!editor.current)return;
+    const start=editor.current.selectionStart;
+    const end=editor.current.selectionEnd;
+    if(text.slice(start,end)!==query){findMatch(1);return;}
+    const caret=start+replacement.length;
+    edit(text.slice(0,start)+replacement+text.slice(end),{start:caret,end:caret});
+  };
   const replaceAll=()=>{if(!query)return;const value=text.split(query).join(replacement);edit(value);notify("ההחלפה הושלמה");};
   const run=(cmd:string)=>{
     setPalette(false);setPaletteQuery("");
@@ -176,6 +195,7 @@ export default function App() {
       else if(mod&&e.shiftKey&&e.key.toLowerCase()==="p"){e.preventDefault();setPalette(true);window.setTimeout(()=>paletteInput.current?.focus(),0);}
       else if(mod&&e.key.toLowerCase()==="z"&&e.target===editor.current){e.preventDefault();if(e.shiftKey)redo();else undo();}
       else if(mod&&e.key.toLowerCase()==="y"&&e.target===editor.current){e.preventDefault();redo();}
+      else if(e.key==="F3"&&findOpen){e.preventDefault();findMatch(e.shiftKey?-1:1);}
       else if(e.key==="Escape"){setPalette(false);setFindOpen(false);}
     };
     window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key);
@@ -245,7 +265,7 @@ export default function App() {
           <button className="side-toggle" title="הצגה/הסתרת סרגל" onClick={()=>setSidebar(v=>!v)}><PanelRightClose size={15}/></button>
           <button className="side-toggle" title="לוח פקודות" onClick={()=>setPalette(true)}><Plus size={15}/></button>
         </div>
-        {findOpen&&<div className="findbar"><div><Search size={14}/><input ref={findInput} value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש"/></div>{replaceOpen&&<div><Replace size={14}/><input value={replacement} onChange={e=>setReplacement(e.target.value)} placeholder="החלפה"/></div>}<small>{matches} התאמות</small>{replaceOpen&&<button onClick={replaceAll}>החלף הכול</button>}<button title="סגירה" onClick={()=>setFindOpen(false)}><X size={14}/></button></div>}
+        {findOpen&&<div className="findbar"><div><Search size={14}/><input ref={findInput} value={query} onChange={e=>setQuery(e.target.value)} placeholder="חיפוש"/></div>{replaceOpen&&<div><Replace size={14}/><input value={replacement} onChange={e=>setReplacement(e.target.value)} placeholder="החלפה"/></div>}<small>{matches} התאמות</small><button onClick={()=>findMatch(-1)}>הקודם</button><button onClick={()=>findMatch(1)}>הבא</button>{replaceOpen&&<><button onClick={replaceCurrent}>החלף</button><button onClick={replaceAll}>החלף הכול</button></>}<button title="סגירה" onClick={()=>setFindOpen(false)}><X size={14}/></button></div>}
         {active?.id==="welcome"?<div className="welcome"><div className="welcome-card"><div className="hero-icon"><Code2 size={34}/></div><small>OFFLINE-FIRST DEVELOPMENT</small><h1>בונים. מריצים. נשארים מקומיים.</h1><p>סביבת פיתוח עצמאית, מהירה ופתוחה — בלי חשבון, בלי ענן ובלי תלות בשירות חיצוני.</p><div className="welcome-buttons"><button className="primary" onClick={newFile}><FilePlus2 size={16}/>קובץ חדש</button><button onClick={()=>void openFile()}><File size={16}/>פתיחת קובץ</button><button onClick={()=>void openFolder()}><FolderOpen size={16}/>פתיחת תיקייה</button></div><div className="features"><div><Keyboard/><b>קיצורי מקלדת</b><span>Ctrl+N קובץ חדש · Ctrl+S שמירה</span></div><div><HardDrive/><b>מקומי כברירת מחדל</b><span>הקבצים נשארים במחשב שלך</span></div><div><Activity/><b>בפיתוח פעיל</b><span>מנוע עריכה ושירותי שפה בדרך</span></div></div></div></div>:
         <div className="editor-body"><div className="crumb">{rootName}　›　{active?.title}</div><div className="codearea" style={{fontSize}}><div className="gutter" ref={gutter}>{lines.map(n=><div key={n}>{n}</div>)}</div><textarea ref={editor} value={text} onChange={e=>edit(e.currentTarget.value,{start:e.currentTarget.selectionStart,end:e.currentTarget.selectionEnd})} onSelect={e=>{const target=e.currentTarget;selections.current.set(activeId,{start:target.selectionStart,end:target.selectionEnd});updateCursor(target.selectionStart);}} onClick={e=>updateCursor(e.currentTarget.selectionStart)} onKeyUp={e=>updateCursor(e.currentTarget.selectionStart)} onKeyDown={editorKey} onScroll={e=>{if(gutter.current)gutter.current.scrollTop=e.currentTarget.scrollTop;}} spellCheck={false} autoCapitalize="off" autoCorrect="off" dir="ltr" wrap="off" aria-label="עורך קוד"/></div></div>}
       </section>
