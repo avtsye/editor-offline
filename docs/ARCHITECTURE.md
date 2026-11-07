@@ -38,7 +38,7 @@ Editor Offline is an original desktop application, not a distribution of VS Code
 ## Milestone order
 
 - **0.1 Workbench:** Windows shell, local file operations, workspace tree, tabs, editing, save, find/replace, keyboard commands, CI.
-- **0.2 Editor core:** explicit cursor and selection model, edit transactions, robust undo/redo, multi-cursor foundations, line virtualization, syntax highlighting.
+- **0.2 Editor core:** replace the textarea adapter with a custom cursor/selection renderer, multi-cursor foundations, line virtualization, grammar-aware syntax highlighting, and large-file performance work.
 - **0.3 Developer workflow:** integrated terminal, tasks, diagnostics, formatting, Git status and diff.
 - **0.4 Language services:** configurable LSP adapters and project-level language detection.
 - **0.5 Local AI:** local provider settings, project context index, read-only review, diff preview, user-approved application.
