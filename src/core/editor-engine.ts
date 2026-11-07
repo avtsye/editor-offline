@@ -12,6 +12,8 @@ const ordered = (selection: EditorSelection) => ({
 export class EditorEngine {
   readonly buffer: TextBuffer;
   private selections: EditorSelection[] = [{ anchor: 0, head: 0 }];
+  private undoBatches: number[] = [];
+  private redoBatches: number[] = [];
 
   constructor(value = "") {
     this.buffer = new TextBuffer(value);
@@ -97,8 +99,15 @@ export class EditorEngine {
       if (previous && edit.from < previous.to) continue;
       accepted.push(edit);
     }
+    let applied = 0;
     for (const edit of [...accepted].reverse()) {
+      if (this.getText().slice(edit.from, edit.to) === edit.insert) continue;
       this.buffer.replaceRange(edit.from, edit.to, edit.insert);
+      applied += 1;
+    }
+    if (applied > 0) {
+      this.undoBatches.push(applied);
+      this.redoBatches = [];
     }
     let shift = 0;
     const nextSelections = accepted.map(edit => {
@@ -143,13 +152,21 @@ export class EditorEngine {
   }
 
   undo(): string {
-    const result = this.buffer.undo();
+    const count = this.undoBatches.pop();
+    if (!count) return this.getText();
+    let result = this.getText();
+    for (let index = 0; index < count; index += 1) result = this.buffer.undo();
+    this.redoBatches.push(count);
     this.setPrimarySelection(Math.min(this.selections[0]?.head ?? 0, result.length));
     return result;
   }
 
   redo(): string {
-    const result = this.buffer.redo();
+    const count = this.redoBatches.pop();
+    if (!count) return this.getText();
+    let result = this.getText();
+    for (let index = 0; index < count; index += 1) result = this.buffer.redo();
+    this.undoBatches.push(count);
     this.setPrimarySelection(Math.min(this.selections[0]?.head ?? 0, result.length));
     return result;
   }
