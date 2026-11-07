@@ -223,7 +223,9 @@ export default function App() {
       if(manifestEntry){
         try{manifest=await invoke<string>("read_text_file",{path:manifestEntry.path});}catch{/* Other project types remain detectable. */}
       }
-      const tasks=detectProjectTasks(names,manifest);
+      let vscodeTasks:string|undefined;
+      try{vscodeTasks=await invoke<string>("read_text_file",{path:directory.replace(/[\\\\/]+$/,"")+"/.vscode/tasks.json"});}catch{/* VS Code task configuration is optional. */}
+      const tasks=detectProjectTasks(names,manifest,vscodeTasks);
       setDetectedTasks(tasks);
       setSelectedTaskId(current=>tasks.some(task=>task.id===current)?current:tasks[0]?.id??"");
     }catch(error){
