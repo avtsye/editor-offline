@@ -35,7 +35,7 @@ describe("editor commands", () => {
   it("moves a selected line down and keeps its selection", () => {
     const result = moveLines("one\ntwo\nthree", 4, 7, 1);
     expect(result.text).toBe("one\nthree\ntwo");
-    expect(result.selectionStart).toBe(9);
-    expect(result.selectionEnd).toBe(12);
+    expect(result.selectionStart).toBe(10);
+    expect(result.selectionEnd).toBe(13);
   });
 });
