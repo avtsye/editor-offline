@@ -16,3 +16,8 @@ src-tauri/target/
 .DS_Store
 Thumbs.db
 *.log
+
+# IDE metadata and generated Tauri schemas
+.idea/
+.vscode/
+src-tauri/gen/schemas/
