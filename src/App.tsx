@@ -460,7 +460,7 @@ export default function App() {
             <b>{result.path.split(/[\\/]/).pop()}</b><small>שורה {result.line_number} · {result.preview}</small><em>{result.path}</em>
           </button>)}</div>
         </div>}
-      </aside>
+      </aside>}
       <section className="editor">
         <div className="tabs">{tabs.map(t=><div key={t.id} className={"tab"+(t.id===activeId?" active":"")} onClick={()=>switchTab(t)}><FileCode2 size={14}/><span>{t.title}</span>{t.dirty&&<Circle size={8} fill="currentColor"/>}<button title="סגירה" onClick={e=>{e.stopPropagation();closeTab(t);}}><X size={13}/></button></div>)}
           <button className="side-toggle" title="הצגה/הסתרת סרגל" onClick={()=>setSidebar(v=>!v)}><PanelRightClose size={15}/></button>
