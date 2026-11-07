@@ -39,10 +39,12 @@ export function findFoldRanges(source: string, languageId: string): FoldRange[] 
     if (char === "{" || char === "[") stack.push({ char, offset: index });
     else if (char === "}" || char === "]") {
       const expected = char === "}" ? "{" : "[";
-      const opening = stack[stack.length - 1];
-      // A mismatched closer must not discard an unrelated open block.
-      if (opening?.char === expected) {
-        stack.pop();
+      // Recover from malformed inner delimiters without losing the matching outer block.
+      let openingIndex = stack.length - 1;
+      while (openingIndex >= 0 && stack[openingIndex].char !== expected) openingIndex -= 1;
+      if (openingIndex >= 0) {
+        const opening = stack[openingIndex];
+        stack.splice(openingIndex);
         const startLine = lineAt(source, opening.offset);
         const endLine = lineAt(source, index);
         if (endLine > startLine) ranges.push({ startLine, endLine, kind: "block", label: char === "}" ? "}" : "]" });
@@ -145,6 +147,7 @@ export class FoldModel {
     return this.collapsed.has(foldKey(range));
   }
   toggle(range: FoldRange): boolean {
+    if (!range) return false;
     const key = foldKey(range);
     if (!this.ranges.some(candidate => foldKey(candidate) === key)) return false;
     if (this.collapsed.has(key)) this.collapsed.delete(key);
