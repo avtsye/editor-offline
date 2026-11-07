@@ -444,8 +444,11 @@ mod tests {
         let dependencies = root.join("node_modules");
         std::fs::create_dir(&source).expect("source directory should be created");
         std::fs::create_dir(&dependencies).expect("dependency directory should be created");
-        std::fs::write(source.join("main.rs"), "first line\\nneedle here\\nlast line")
-            .expect("source file should be written");
+        std::fs::write(
+            source.join("main.rs"),
+            "first line\\nneedle here\\nlast line",
+        )
+        .expect("source file should be written");
         std::fs::write(dependencies.join("ignored.js"), "needle in dependency")
             .expect("dependency file should be written");
 
