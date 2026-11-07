@@ -46,7 +46,6 @@ fn create_directory(path: String) -> Result<(), String> {
     fs::create_dir_all(&path).map_err(|error| format!("{}: {}", path, error))
 }
 
-
 fn validate_child_name(name: &str) -> Result<(), String> {
     if name.is_empty()
         || name.trim() != name
