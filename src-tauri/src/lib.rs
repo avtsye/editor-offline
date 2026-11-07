@@ -107,7 +107,7 @@ fn search_directory(
 }
 
 #[tauri::command]
-fn search_workspace(directory: String, query: String) -> Result<Vec<SearchResult>, String> {
+async fn search_workspace(directory: String, query: String) -> Result<Vec<SearchResult>, String> {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
         return Err("יש להזין טקסט לחיפוש.".into());
@@ -118,15 +118,20 @@ fn search_workspace(directory: String, query: String) -> Result<Vec<SearchResult
         return Err("תיקיית העבודה אינה קיימת.".into());
     }
 
-    let mut results = Vec::new();
-    let mut files_scanned = 0;
-    search_directory(&root, &query, &mut results, &mut files_scanned, 0);
-    results.sort_by(|a, b| {
-        a.path
-            .cmp(&b.path)
-            .then_with(|| a.line_number.cmp(&b.line_number))
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        let mut results = Vec::new();
+        let mut files_scanned = 0;
+        search_directory(&root, &query, &mut results, &mut files_scanned, 0);
+        results.sort_by(|a, b| {
+            a.path
+                .cmp(&b.path)
+                .then_with(|| a.line_number.cmp(&b.line_number))
+        });
+        Ok(results)
     });
-    Ok(results)
+
+    task.await
+        .map_err(|error| format!("משימת החיפוש נכשלה: {}", error))?
 }
 
 fn limit_command_output(mut value: String) -> String {
