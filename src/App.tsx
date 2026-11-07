@@ -13,6 +13,15 @@ type Tab = { id: string; path: string | null; title: string; content: string; sa
 type CommandResult = { stdout: string; stderr: string; exit_code: number | null; success: boolean };
 type ProjectSearchResult = { path: string; line_number: number; preview: string };
 type LocalChatMessage = { role: "user" | "assistant" | "system"; content: string };
+const LOCAL_PROVIDERS = [
+  { id: "ollama", label: "Ollama", baseUrl: "http://127.0.0.1:11434/v1" },
+  { id: "lmstudio", label: "LM Studio", baseUrl: "http://127.0.0.1:1234/v1" },
+  { id: "llamacpp", label: "llama.cpp", baseUrl: "http://127.0.0.1:8080/v1" },
+  { id: "localai", label: "LocalAI", baseUrl: "http://127.0.0.1:8080/v1" },
+  { id: "jan", label: "Jan", baseUrl: "http://127.0.0.1:1337/v1" },
+  { id: "vllm", label: "vLLM", baseUrl: "http://127.0.0.1:8000/v1" },
+  { id: "custom", label: "שרת מקומי מותאם", baseUrl: "" },
+];
 const WELCOME = ["ברוכים הבאים ל־Editor Offline", "", "סביבת פיתוח עצמאית, מקומית וקלה.", "", "פתחו קובץ או תיקייה כדי להתחיל לעבוד.", "זהו שלב הבסיס של סביבת הפיתוח; מנוע העריכה ושירותי השפה מתפתחים בהדרגה."].join("\n");
 const FILTERS = [{ name: "קובצי קוד וטקסט", extensions: ["txt","md","js","jsx","ts","tsx","py","rs","json","html","css","toml","yaml","yml","xml","c","h","cpp","hpp","cs","java","dart","go","php","sql","sh","bat","ps1"] }, { name: "כל הקבצים", extensions: ["*"] }];
 const id = () => globalThis.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
@@ -45,6 +54,9 @@ export default function App() {
   const [paletteQuery,setPaletteQuery] = useState("");
   const [sidebar,setSidebar] = useState(true);
   const [sidebarView,setSidebarView] = useState<"files"|"search"|"ai">("files");
+  const [localProvider,setLocalProvider] = useState("ollama");
+  const [localBaseUrl,setLocalBaseUrl] = useState("http://127.0.0.1:11434/v1");
+  const [localApiKey,setLocalApiKey] = useState("");
   const [localModels,setLocalModels] = useState<string[]>([]);
   const [selectedLocalModel,setSelectedLocalModel] = useState("");
   const [aiMessages,setAiMessages] = useState<LocalChatMessage[]>([]);
@@ -225,17 +237,26 @@ export default function App() {
     }catch(error){notify("המחיקה נכשלה: "+String(error));}
   };
 
+  const changeLocalProvider=(providerId:string)=>{
+    setLocalProvider(providerId);
+    const preset=LOCAL_PROVIDERS.find(provider=>provider.id===providerId);
+    setLocalBaseUrl(preset?.baseUrl??"");
+    setLocalModels([]);
+    setSelectedLocalModel("");
+    setAiStatus("מוכן לבדיקה");
+  };
   const loadLocalModels=async()=>{
-    setAiStatus("בודק חיבור ל־Ollama…");
+    if(!localBaseUrl.trim()){setAiStatus("יש להזין כתובת API מקומית");return;}
+    setAiStatus("בודק את השרת המקומי…");
     try{
-      const models=await invoke<string[]>("list_local_models");
+      const models=await invoke<string[]>("list_local_models",{baseUrl:localBaseUrl,apiKey:localApiKey||null});
       setLocalModels(models);
-      setSelectedLocalModel(current=>current&&models.includes(current)?current:models[0]??"");
-      setAiStatus(models.length?`מחובר · ${models.length} מודלים`:"Ollama פועל, אך לא נמצאו מודלים");
-      if(!models.length)notify("Ollama זמין. יש להתקין מודל מקומי דרך Ollama.");
+      setSelectedLocalModel(current=>current||models[0]||"");
+      setAiStatus(models.length?"מחובר · "+models.length+" מודלים":"השרת זמין; אפשר להזין מזהה מודל ידנית");
+      if(!models.length)notify("השרת זמין, אך לא החזיר רשימת מודלים. אפשר להזין מזהה מודל ידנית.");
     }catch(error){
-      setAiStatus("לא מחובר");
-      notify("לא ניתן להתחבר ל־Ollama המקומי: "+String(error));
+      setAiStatus("לא ניתן לטעון מודלים · אפשר להזין מזהה ידנית");
+      notify("טעינת המודלים נכשלה: "+String(error));
     }
   };
   const sendLocalChat=async()=>{
@@ -248,7 +269,7 @@ export default function App() {
       const fileContext=text.slice(0,25_000);
       requestMessages.push({
         role:"system",
-        content:`אתה עוזר תכנות מקומי. נתח את הקובץ המצורף, אך אל תניח שיש לך הרשאה לשנות קבצים או להריץ פקודות. קובץ: ${active.path}\n\n${fileContext}${text.length>25_000?"\n[הקובץ קוצר ל־25,000 תווים]":""}`,
+        content:"אתה עוזר תכנות מקומי. נתח את הקובץ המצורף, אך אל תניח שיש לך הרשאה לשנות קבצים או להריץ פקודות. קובץ: "+active.path+"\n\n"+fileContext+(text.length>25_000?"\n[הקובץ קוצר ל־25,000 תווים]":""),
       });
     }
     requestMessages.push(...nextMessages);
@@ -256,7 +277,12 @@ export default function App() {
     setAiInput("");
     setAiBusy(true);
     try{
-      const response=await invoke<string>("chat_local_model",{model:selectedLocalModel,messages:requestMessages});
+      const response=await invoke<string>("chat_local_model",{
+        baseUrl:localBaseUrl,
+        apiKey:localApiKey||null,
+        model:selectedLocalModel,
+        messages:requestMessages,
+      });
       setAiMessages(old=>[...old,{role:"assistant",content:response}]);
     }catch(error){
       setAiMessages(old=>[...old,{role:"assistant",content:"הבקשה נכשלה: "+String(error)}]);
@@ -507,18 +533,21 @@ export default function App() {
             <b>{result.path.split(/[\\/]/).pop()}</b><small>שורה {result.line_number} · {result.preview}</small><em>{result.path}</em>
           </button>)}</div>
         </div>:<div className="local-ai">
-          <div className="ai-toolbar"><div><b>Ollama מקומי</b><small>{aiStatus}</small></div><button title="בדיקת חיבור וטעינת מודלים" onClick={()=>void loadLocalModels()} disabled={aiBusy}><RefreshCw size={14}/></button></div>
-          <select className="ai-model-select" value={selectedLocalModel} onChange={event=>setSelectedLocalModel(event.target.value)} disabled={!localModels.length||aiBusy}>
-            {!localModels.length&&<option value="">אין מודלים טעונים</option>}
-            {localModels.map(model=><option key={model} value={model}>{model}</option>)}
+          <div className="ai-toolbar"><div><b>חיבור למודל מקומי</b><small>{aiStatus}</small></div><button title="בדיקת חיבור וטעינת מודלים" onClick={()=>void loadLocalModels()} disabled={aiBusy}><RefreshCw size={14}/></button></div>
+          <select className="ai-provider-select" value={localProvider} onChange={event=>changeLocalProvider(event.target.value)} disabled={aiBusy}>
+            {LOCAL_PROVIDERS.map(provider=><option key={provider.id} value={provider.id}>{provider.label}</option>)}
           </select>
+          <input className="ai-endpoint-input" type="url" aria-label="כתובת API מקומית" value={localBaseUrl} onChange={event=>setLocalBaseUrl(event.target.value)} placeholder="http://127.0.0.1:1234/v1" disabled={aiBusy}/>
+          <input className="ai-key-input" type="password" aria-label="מפתח גישה אופציונלי" value={localApiKey} onChange={event=>setLocalApiKey(event.target.value)} placeholder="Bearer token (אופציונלי)" disabled={aiBusy} autoComplete="off"/>
+          <input className="ai-model-select" list="local-model-options" value={selectedLocalModel} onChange={event=>setSelectedLocalModel(event.target.value)} placeholder="שם מודל (או בחירה מהרשימה)" disabled={aiBusy}/>
+          <datalist id="local-model-options">{localModels.map(model=><option key={model} value={model}/>)}</datalist>
           <label className="ai-context-toggle"><input type="checkbox" checked={includeActiveFile} onChange={event=>setIncludeActiveFile(event.target.checked)} disabled={!active?.path||aiBusy}/>כלול את הקובץ הפתוח בהקשר המקומי</label>
-          <div className="ai-messages">{aiMessages.length?aiMessages.map((message,index)=><div key={index} className={"ai-message "+message.role}><small>{message.role==="user"?"אתה":message.role==="assistant"?"המודל":"הקשר"}</small><p>{message.content}</p></div>):<div className="ai-empty"><Bot size={24}/><b>עוזר תכנות מקומי</b><span>התחבר ל־Ollama, בחר מודל ושאל שאלה. התוכן נשלח רק לשרת המקומי במחשב.</span></div>}</div>
+          <div className="ai-messages">{aiMessages.length?aiMessages.map((message,index)=><div key={index} className={"ai-message "+message.role}><small>{message.role==="user"?"אתה":message.role==="assistant"?"המודל":"הקשר"}</small><p>{message.content}</p></div>):<div className="ai-empty"><Bot size={24}/><b>עוזר תכנות מקומי</b><span>בחר ספק מקומי, הזן כתובת API תואמת OpenAI ובחר או כתוב מזהה מודל. התוכן נשלח לשרת המקומי בלבד.</span></div>}</div>
           <form className="ai-compose" onSubmit={event=>{event.preventDefault();void sendLocalChat();}}>
             <textarea ref={aiInputRef} value={aiInput} onChange={event=>setAiInput(event.target.value)} placeholder="כתוב שאלה למודל המקומי…" disabled={!selectedLocalModel||aiBusy} rows={3}/>
             <div><button type="button" title="ניקוי השיחה" onClick={()=>setAiMessages([])} disabled={!aiMessages.length||aiBusy}><Trash2 size={13}/></button><span>{selectedLocalModel||"אין מודל נבחר"}</span><button type="submit" disabled={!selectedLocalModel||!aiInput.trim()||aiBusy}><Send size={14}/>{aiBusy?"ממתין…":"שלח"}</button></div>
           </form>
-          <p className="ai-footnote">ללא ענן וללא שליחת קוד החוצה. העוזר אינו משנה קבצים ואינו מריץ פקודות.</p>
+          <p className="ai-footnote">תומך ב־OpenAI-compatible API על localhost. מפתח הגישה נשאר בזיכרון בלבד. העוזר אינו משנה קבצים ואינו מריץ פקודות.</p>
         </div>}
       </aside>}
       <section className="editor">

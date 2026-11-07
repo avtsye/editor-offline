@@ -25,10 +25,12 @@ Editor Offline is an original desktop application, not a distribution of VS Code
    - LSP for language intelligence.
    - DAP for debugging.
    - A first local command runner executes user-entered shell commands in the workspace; interactive PTY sessions and configurable tasks remain planned.
-5. **Local AI — first adapter implemented**
-   - Read-only chat with Ollama through the loopback address `127.0.0.1:11434`.
-   - Optional active-file context is sent only to the local Ollama process.
-   - The assistant cannot edit files or run commands; approved diff application and additional local providers remain planned.
+5. **Local AI — OpenAI-compatible adapter implemented**
+   - Read-only chat and model discovery through configurable local /v1/models and /v1/chat/completions endpoints.
+   - Presets for Ollama, LM Studio, llama.cpp server, LocalAI, Jan, and vLLM, plus custom loopback endpoints.
+   - The Rust backend rejects non-loopback hosts; optional bearer tokens are passed only to the validated local endpoint and are not persisted.
+   - Optional active-file context is sent only to the selected local server.
+   - The assistant cannot edit files or run commands; native adapters for proprietary protocols and approved diff application remain planned.
    - No cloud provider is required for normal operation.
 
 ## Non-goals

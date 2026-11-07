@@ -79,3 +79,11 @@
 .ai-compose button{height:28px;display:flex;align-items:center;gap:5px;padding:0 8px;border:1px solid #4a6089;border-radius:4px;color:#dce7fa;background:#2d4266;font-size:9px}
 .ai-compose button:disabled{opacity:.35}
 .ai-footnote{margin:0;color:#718097;font-size:8px;line-height:1.5}
+
+
+/* Configurable local OpenAI-compatible model endpoints */
+.ai-provider-select,.ai-endpoint-input,.ai-key-input{width:100%;height:30px;padding:0 8px;border:1px solid #394354;border-radius:5px;color:#dce5f3;background:#1b2029;font-size:10px;direction:ltr;text-align:left}
+.ai-provider-select{direction:rtl;text-align:right}
+.ai-endpoint-input:focus,.ai-key-input:focus,.ai-provider-select:focus{outline:0;border-color:#6986bc}
+.ai-endpoint-input::placeholder,.ai-key-input::placeholder{color:#77849a}
+.ai-model-select{direction:ltr;text-align:left}

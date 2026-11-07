@@ -26,30 +26,75 @@ struct LocalChatMessage {
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaModelsResponse {
-    models: Vec<OllamaModel>,
+struct OpenAiModelsResponse {
+    #[serde(default)]
+    data: Vec<OpenAiModel>,
+    #[serde(default)]
+    models: Vec<OpenAiModel>,
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaModel {
-    name: String,
+struct OpenAiModel {
+    #[serde(alias = "name", alias = "model")]
+    id: String,
 }
 
 #[derive(Debug, Serialize)]
-struct OllamaChatRequest<'a> {
+struct OpenAiChatRequest<'a> {
     model: &'a str,
     messages: &'a [LocalChatMessage],
     stream: bool,
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaChatResponse {
-    message: OllamaChatResponseMessage,
+struct OpenAiChatResponse {
+    choices: Vec<OpenAiChatChoice>,
 }
 
 #[derive(Debug, Deserialize)]
-struct OllamaChatResponseMessage {
+struct OpenAiChatChoice {
+    message: OpenAiChatResponseMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenAiChatResponseMessage {
     content: String,
+}
+
+fn validate_local_api_base_url(base_url: &str) -> Result<reqwest::Url, String> {
+    let trimmed = base_url.trim();
+    if trimmed.is_empty() || trimmed.len() > 2_048 {
+        return Err("יש להזין כתובת API מקומית תקינה.".into());
+    }
+    let mut url = reqwest::Url::parse(trimmed)
+        .map_err(|_| "כתובת ה־API אינה תקינה.".to_string())?;
+    if !matches!(url.scheme(), "http" | "https")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("יש להשתמש בכתובת HTTP(S) מקומית ללא פרטי משתמש, שאילתה או מקטע.".into());
+    }
+    let host = url.host_str()
+        .ok_or_else(|| "כתובת ה־API חייבת לכלול מארח מקומי.".to_string())?;
+    let is_loopback = host.eq_ignore_ascii_case("localhost")
+        || host.parse::<std::net::IpAddr>()
+            .map(|address| address.is_loopback())
+            .unwrap_or(false);
+    if !is_loopback {
+        return Err("מטעמי פרטיות, החיבור מוגבל ל־localhost ולכתובות loopback בלבד.".into());
+    }
+    let path = url.path().trim_end_matches('/').to_string();
+    url.set_path(&format!("{path}/"));
+    Ok(url)
+}
+
+fn validate_local_api_key(api_key: &str) -> Result<(), String> {
+    if api_key.len() > 2_048 {
+        return Err("מפתח הגישה ארוך מדי.".into());
+    }
+    Ok(())
 }
 
 fn validate_local_chat_request(model: &str, messages: &[LocalChatMessage]) -> Result<(), String> {
@@ -357,69 +402,81 @@ fn delete_path(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn list_local_models() -> Result<Vec<String>, String> {
+async fn list_local_models(
+    base_url: String,
+    api_key: Option<String>,
+) -> Result<Vec<String>, String> {
+    let base = validate_local_api_base_url(&base_url)?;
+    let api_key = api_key.unwrap_or_default();
+    validate_local_api_key(&api_key)?;
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(8))
         .build()
         .map_err(|error| format!("יצירת חיבור מקומי נכשלה: {}", error))?;
-    let response = client
-        .get("http://127.0.0.1:11434/api/tags")
-        .send()
-        .await
-        .map_err(|_| {
-            "לא ניתן להתחבר ל־Ollama בכתובת המקומית 127.0.0.1:11434. יש לוודא שהוא פועל."
-                .to_string()
-        })?;
-    if !response.status().is_success() {
-        return Err(format!("Ollama החזיר שגיאת HTTP: {}", response.status()));
+    let mut request = client.get(
+        base.join("models")
+            .map_err(|error| format!("כתובת רשימת המודלים אינה תקינה: {}", error))?,
+    );
+    if !api_key.trim().is_empty() {
+        request = request.bearer_auth(api_key.trim());
     }
-
-    let mut models = response
-        .json::<OllamaModelsResponse>()
+    let response = request.send().await.map_err(|_| {
+        "לא ניתן להתחבר לשרת המקומי. בדקו שהוא פועל ושהכתובת כוללת את נתיב ה־API הנכון."
+            .to_string()
+    })?;
+    if !response.status().is_success() {
+        return Err(format!("שרת המודלים החזיר שגיאת HTTP: {}", response.status()));
+    }
+    let payload = response.json::<OpenAiModelsResponse>()
         .await
-        .map_err(|error| format!("תשובת Ollama אינה תקינה: {}", error))?
-        .models
-        .into_iter()
-        .map(|model| model.name)
+        .map_err(|error| format!("תשובת רשימת המודלים אינה תואמת OpenAI API: {}", error))?;
+    let mut models = payload.data.into_iter().chain(payload.models)
+        .map(|model| model.id)
+        .filter(|model| !model.trim().is_empty())
         .collect::<Vec<_>>();
     models.sort();
+    models.dedup();
     Ok(models)
 }
 
 #[tauri::command]
 async fn chat_local_model(
+    base_url: String,
+    api_key: Option<String>,
     model: String,
     messages: Vec<LocalChatMessage>,
 ) -> Result<String, String> {
     validate_local_chat_request(&model, &messages)?;
-
+    let base = validate_local_api_base_url(&base_url)?;
+    let api_key = api_key.unwrap_or_default();
+    validate_local_api_key(&api_key)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(180))
         .build()
         .map_err(|error| format!("יצירת חיבור מקומי נכשלה: {}", error))?;
-    let request = OllamaChatRequest {
-        model: &model,
-        messages: &messages,
-        stream: false,
-    };
-    let response = client
-        .post("http://127.0.0.1:11434/api/chat")
-        .json(&request)
-        .send()
-        .await
-        .map_err(|_| "הבקשה למודל המקומי נכשלה. בדקו ש־Ollama עדיין פועל.".to_string())?;
+    let request = OpenAiChatRequest { model: &model, messages: &messages, stream: false };
+    let mut outgoing = client.post(
+        base.join("chat/completions")
+            .map_err(|error| format!("כתובת הצ'אט אינה תקינה: {}", error))?,
+    ).json(&request);
+    if !api_key.trim().is_empty() {
+        outgoing = outgoing.bearer_auth(api_key.trim());
+    }
+    let response = outgoing.send().await.map_err(|_| {
+        "הבקשה לשרת המודל המקומי נכשלה. בדקו שהשרת פועל ושהכתובת נכונה.".to_string()
+    })?;
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         let detail = body.chars().take(240).collect::<String>();
-        return Err(format!("Ollama החזיר HTTP {}: {}", status, detail));
+        return Err(format!("שרת המודל החזיר HTTP {}: {}", status, detail));
     }
-
-    let response = response
-        .json::<OllamaChatResponse>()
+    let response = response.json::<OpenAiChatResponse>()
         .await
-        .map_err(|error| format!("תשובת המודל אינה תקינה: {}", error))?;
-    Ok(response.message.content)
+        .map_err(|error| format!("תשובת המודל אינה תואמת OpenAI Chat Completions: {}", error))?;
+    response.choices.into_iter().next()
+        .map(|choice| choice.message.content)
+        .ok_or_else(|| "שרת המודל החזיר תשובה ללא בחירה (choices).".into())
 }
 
 #[tauri::command]
@@ -455,7 +512,7 @@ mod tests {
     use super::{
         append_search_matches, create_directory_in_directory, create_file_in_directory,
         delete_path, limit_command_output, rename_path, search_directory, validate_child_name,
-        validate_local_chat_request, LocalChatMessage,
+        validate_local_api_base_url, validate_local_chat_request, LocalChatMessage,
     };
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -584,6 +641,28 @@ mod tests {
         assert_eq!(results[0].line_number, 2);
         assert!(results[0].path.ends_with("main.rs"));
         std::fs::remove_dir_all(root).expect("temporary directory should be removed");
+    }
+
+    #[test]
+    fn local_api_accepts_loopback_urls_and_rejects_remote_hosts() {
+        for url in [
+            "http://127.0.0.1:11434/v1",
+            "http://localhost:1234/v1/",
+            "http://[::1]:8080/v1",
+            "https://127.0.0.1:9443/v1",
+        ] {
+            assert!(validate_local_api_base_url(url).is_ok(), "rejected local URL: {url}");
+        }
+        for url in [
+            "https://example.com/v1",
+            "http://192.168.1.20:1234/v1",
+            "http://0.0.0.0:8080/v1",
+            "ftp://127.0.0.1/v1",
+            "http://user:pass@127.0.0.1/v1",
+            "http://127.0.0.1/v1?token=secret",
+        ] {
+            assert!(validate_local_api_base_url(url).is_err(), "accepted unsafe URL: {url}");
+        }
     }
 
     #[test]
