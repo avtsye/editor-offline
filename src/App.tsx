@@ -31,6 +31,7 @@ export default function App() {
   const [sidebar,setSidebar] = useState(true);
   const [toast,setToast] = useState("");
   const [fontSize,setFontSize] = useState(14);
+  const [cursor,setCursor] = useState({line:1,column:1});
   const [busy,setBusy] = useState(false);
   const editor = useRef<HTMLTextAreaElement>(null);
   const gutter = useRef<HTMLDivElement>(null);
@@ -188,16 +189,16 @@ export default function App() {
     }
     if(e.key==="Enter"){
       e.preventDefault();
-      const lineStart=text.lastIndexOf("\\n",Math.max(0,start-1))+1;
+      const lineStart=text.lastIndexOf("\n",Math.max(0,start-1))+1;
       const beforeCursor=text.slice(lineStart,start);
-      const indent=beforeCursor.match(/^[\\t ]*/)?.[0]??"";
-      const extra=/[\\{\\[\\(][\\t ]*$/.test(beforeCursor)?"    ":"";
-      const insertion="\\n"+indent+extra;
+      const indent=beforeCursor.match(/^[\t ]*/)?.[0]??"";
+      const extra=/[{\[(][\t ]*$/.test(beforeCursor)?"    ":"";
+      const insertion="\n"+indent+extra;
       const caret=start+insertion.length;
       edit(text.slice(0,start)+insertion+text.slice(end),{start:caret,end:caret});
       return;
     }
-    const pairs:Record<string,string>={"(":")","[":"]","{":"}","\"":"\"","'":"'","\u0060":"\u0060"};
+    const pairs:Record<string,string>={"(":")","[":"]","{":"}","\"":"\"","'":"'"}; 
     const closing=pairs[e.key];
     if(closing){
       e.preventDefault();
