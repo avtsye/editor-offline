@@ -68,8 +68,10 @@ The current editing surface is an intentionally small native textarea adapter ba
 | Ctrl+S | Save |
 | Ctrl+F | Find |
 | Ctrl+H | Find and replace |
+| F3 / Shift+F3 | Next / previous match |
+| Ctrl+G | Go to line |
 | Ctrl+Shift+P | Command palette |
-| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z | Undo / redo |
 
 ## Principles
 
