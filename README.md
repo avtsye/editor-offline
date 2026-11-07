@@ -15,7 +15,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Rename workspace files and folders from the explorer context menu
 - [x] Delete files and empty folders with confirmation and unsaved-tab checks
 - [x] Local workspace command runner with bounded output and asynchronous execution
-- [x] Project task detection for npm/pnpm/yarn/bun scripts, Cargo, Python, Go, Make, and .NET
+- [x] Project task detection for npm/pnpm/yarn/bun scripts, Cargo, Python, Go, Make, .NET, and `.vscode/tasks.json`
 - [x] F5 project launch, task selection, and separate terminal windows for long-running development servers
 - [x] Tabs, dirty-state indicators, keyboard shortcuts, find/replace
 - [x] Independent transactional text buffer with per-tab undo/redo and unit tests
@@ -32,7 +32,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Read-only local AI chat through OpenAI-compatible local APIs, with optional active-file context
 - [ ] Approved AI diff application, streaming responses, and native adapters for non-OpenAI local protocols
 
-## Technology
+### Project execution\n\nWhen a workspace is opened, the IDE detects common project manifests and package-manager lockfiles, then offers the discovered scripts in the task selector. It also imports simple `shell` and `process` tasks from `.vscode/tasks.json`. Press **F5** to run the selected task. Short commands report their output in the built-in command panel; development servers and other recognized long-running commands open in a separate system terminal so they remain alive after the launch request returns.\n\n## Technology
 
 - **Desktop:** Tauri 2 + Rust
 - **UI:** React + TypeScript + Vite
