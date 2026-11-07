@@ -4,7 +4,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
 import { tokenize } from "./core/tokenizer";
-import { findMatchingBrackets } from "./core/bracket-matching";
+import { buildBracketPairMap } from "./core/bracket-matching";
 import { findDelimiterDiagnostics } from "./core/syntax-diagnostics";
 import { sliceTokens } from "./core/token-slice";
 import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
@@ -154,10 +154,15 @@ export default function App() {
     ()=>sliceTokens(syntaxTokens,visibleStartOffset,visibleEndOffset),
     [syntaxTokens,visibleStartOffset,visibleEndOffset]
   );
-  const matchingBracketPair=useMemo(
-    ()=>findMatchingBrackets(syntaxTokens,cursorOffset),
-    [syntaxTokens,cursorOffset]
+  const bracketPairMap=useMemo(
+    ()=>buildBracketPairMap(syntaxTokens),
+    [syntaxTokens]
   );
+  const matchingBracketPair=useMemo(()=>{
+    const sourceOffset=bracketPairMap.has(cursorOffset)?cursorOffset:cursorOffset-1;
+    const partner=bracketPairMap.get(sourceOffset);
+    return partner===undefined?null:[sourceOffset,partner] as [number,number];
+  },[bracketPairMap,cursorOffset]);
   const matchingBracketOffsets=useMemo(
     ()=>new Set(matchingBracketPair??[]),
     [matchingBracketPair]
