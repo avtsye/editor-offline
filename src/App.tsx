@@ -5,6 +5,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { TextBuffer } from "./core/text-buffer";
 import { tokenize } from "./core/tokenizer";
 import { sliceTokens } from "./core/token-slice";
+import { isPathWithin, parentPath, remapPath } from "./core/path-utils";
 
 type FileEntry = { name: string; path: string; is_dir: boolean };
 type Tab = { id: string; path: string | null; title: string; content: string; saved: string; dirty: boolean };
@@ -144,22 +145,16 @@ export default function App() {
       notify("התיקייה נוצרה");
     }catch(error){notify("יצירת התיקייה נכשלה: "+String(error));}
   };
-  const pathInside=(candidate:string,base:string)=>{
-    const separator=base.includes("\\\\")?"\\\\":"/";
-    return candidate===base||candidate.startsWith(base+separator);
-  };
-  const remapPath=(candidate:string,oldPath:string,newPath:string)=>
-    candidate===oldPath?newPath:pathInside(candidate,oldPath)?newPath+candidate.slice(oldPath.length):candidate;
   const renameEntry=async(entry:FileEntry)=>{
     const requested=window.prompt("שם חדש",entry.name);
     if(requested===null||!requested.trim()||requested.trim()===entry.name)return;
     try{
       const nextPath=await invoke<string>("rename_path",{path:entry.path,name:requested.trim()});
-      setTabs(old=>old.map(tab=>tab.path&&pathInside(tab.path,entry.path)
+      setTabs(old=>old.map(tab=>tab.path&&isPathWithin(tab.path,entry.path)
         ?{...tab,path:remapPath(tab.path,entry.path,nextPath),title:remapPath(tab.path,entry.path,nextPath).split(/[\\\\/]/).pop()||tab.title}
         :tab));
-      setRoot(old=>old&&pathInside(old,entry.path)?remapPath(old,entry.path,nextPath):old);
-      setActiveDirectory(old=>old&&pathInside(old,entry.path)?remapPath(old,entry.path,nextPath):old);
+      setRoot(old=>old&&isPathWithin(old,entry.path)?remapPath(old,entry.path,nextPath):old);
+      setActiveDirectory(old=>old&&isPathWithin(old,entry.path)?remapPath(old,entry.path,nextPath):old);
       setExpanded(old=>new Set([...old].map(path=>remapPath(path,entry.path,nextPath))));
       setCache(old=>{
         const next:Record<string,FileEntry[]>={};
@@ -169,13 +164,13 @@ export default function App() {
         }
         return next;
       });
-      const parent=entry.path.slice(0,Math.max(entry.path.lastIndexOf("/"),entry.path.lastIndexOf("\\\\")));
+      const parent=parentPath(entry.path);
       if(parent)await readDir(parent);
       notify("השם עודכן");
     }catch(error){notify("שינוי השם נכשל: "+String(error));}
   };
   const deleteEntry=async(entry:FileEntry)=>{
-    const openTabs=entry.is_dir?tabs.filter(tab=>tab.path&&pathInside(tab.path,entry.path)):[];
+    const openTabs=entry.is_dir?tabs.filter(tab=>tab.path&&isPathWithin(tab.path,entry.path)):[];
     const fileTab=tabs.find(tab=>tab.path===entry.path);
     const affected=entry.is_dir?openTabs:fileTab?[fileTab]:[];
     if(affected.some(tab=>tab.dirty)&&!window.confirm("יש קבצים עם שינויים שלא נשמרו. למחוק בכל זאת?"))return;
@@ -198,11 +193,11 @@ export default function App() {
           }
         }
       }
-      const parent=entry.path.slice(0,Math.max(entry.path.lastIndexOf("/"),entry.path.lastIndexOf("\\\\")));
+      const parent=parentPath(entry.path);
       if(parent)await readDir(parent);
-      setCache(old=>Object.fromEntries(Object.entries(old).filter(([directory])=>!pathInside(directory,entry.path))));
-      setExpanded(old=>new Set([...old].filter(path=>!pathInside(path,entry.path))));
-      if(activeDirectory&&pathInside(activeDirectory,entry.path))setActiveDirectory(parent||root);
+      setCache(old=>Object.fromEntries(Object.entries(old).filter(([directory])=>!isPathWithin(directory,entry.path))));
+      setExpanded(old=>new Set([...old].filter(path=>!isPathWithin(path,entry.path))));
+      if(activeDirectory&&isPathWithin(activeDirectory,entry.path))setActiveDirectory(parent||root);
       notify("הפריט נמחק");
     }catch(error){notify("המחיקה נכשלה: "+String(error));}
   };
