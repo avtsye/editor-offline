@@ -15,7 +15,7 @@ Editor Offline is being built from scratch around an original editing engine. It
 - [x] Rename workspace files and folders from the explorer context menu
 - [x] Delete files and empty folders with confirmation and unsaved-tab checks
 - [x] Local workspace command runner with bounded output and asynchronous execution
-- [x] Project task detection for npm scripts, Cargo, Python, Go, Make, and .NET
+- [x] Project task detection for npm/pnpm/yarn/bun scripts, Cargo, Python, Go, Make, and .NET
 - [x] F5 project launch, task selection, and separate terminal windows for long-running development servers
 - [x] Tabs, dirty-state indicators, keyboard shortcuts, find/replace
 - [x] Independent transactional text buffer with per-tab undo/redo and unit tests
