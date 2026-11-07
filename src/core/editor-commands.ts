@@ -60,8 +60,6 @@ export function moveLines(text: string, start: number, end: number, direction: -
   const selectedEnd = end > start ? lineEndAt(text, Math.min(end, text.length)) : lineEndAt(text, start);
   const blockEnd = selectedEnd < text.length ? selectedEnd + 1 : selectedEnd;
   const block = text.slice(from, blockEnd);
-  const lines = block.split("\\n");
-  const selectedLineCount = lines.length - (block.endsWith("\\n") ? 1 : 0);
   if (direction < 0) {
     if (from === 0) return { text, selectionStart: start, selectionEnd: end };
     const previousStart = lineStartAt(text, from - 1);
@@ -70,7 +68,7 @@ export function moveLines(text: string, start: number, end: number, direction: -
     return { text: moved, selectionStart: start - previous.length, selectionEnd: end - previous.length };
   }
   if (blockEnd >= text.length) return { text, selectionStart: start, selectionEnd: end };
-  const nextEnd = lineEndAt(text, blockEnd + 1);
+  const nextEnd = lineEndAt(text, blockEnd);
   const nextBlockEnd = nextEnd < text.length ? nextEnd + 1 : nextEnd;
   const next = text.slice(blockEnd, nextBlockEnd);
   const moved = text.slice(0, from) + next + block + text.slice(nextBlockEnd);
